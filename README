@@ -12,7 +12,7 @@ Then you can upload them to YouTube or Twitter and have infinate tape storage li
 
 TODO:
 - [x] encode file to frames
-- [x] decode file to frames
+- [ ] decode file to frames
 - [ ] generate video
 - [ ] decode video
 - [ ] add encryption
