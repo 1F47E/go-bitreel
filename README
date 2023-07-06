@@ -5,8 +5,8 @@ Then upload them to YouTube or Twitter.
 
 
 TODO:
-- [x] encode file to 1 frame
-- [x] decode file to 1 frame
+- [x] encode file to frames
+- [x] decode file to frames
 - [ ] generate video
 - [ ] decode video
 - [ ] add encryption
