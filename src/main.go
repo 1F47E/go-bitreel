@@ -11,7 +11,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 // Amount of bits in 1 4k frame
@@ -36,9 +39,7 @@ func main() {
 		encode(file)
 	}
 
-	fmt.Println("Waiting for goroutines to finish")
 	wg.Wait()
-	fmt.Println("Done")
 }
 
 func decode(filename string) {
@@ -108,7 +109,6 @@ func decode(filename string) {
 }
 
 func encode(filename string) {
-	fmt.Println("Encoding")
 
 	// open a file and read to bytes
 	file, err := os.Open(filename)
@@ -125,23 +125,44 @@ func encode(filename string) {
 	}
 
 	b := buf.Bytes()
-	fmt.Println("Read bytes:", len(b))
 
-	// calc amount of frames
-	framesCnt := math.Ceil(float64(len(b)) / float64(frameSizeBits/8))
-	fmt.Println("Frames:", framesCnt)
-	// bitsBuffer := make([]bool, frameSizeBits)
-	var bitsBuffer [frameSizeBits]bool
+	// print the size
+	fmt.Print("File size: ")
+	if len(b) > 1024 {
+		fmt.Printf("%d %s\n", len(b)/1024, "KB")
+	} else if len(b) > 1024*1024 {
+		fmt.Printf("%d %s\n", len(b)/1024/1024, "MB")
+	} else if len(b) > 1024*1024*1024 {
+		fmt.Printf("%d %s\n", len(b)/1024/1024/1024, "GB")
+	} else {
+		fmt.Printf("%d %s\n", len(b), "Bytes")
+	}
+
+	// calc amount of frames and frame size
+	totalFramesCnt := uint64(math.Ceil(float64(len(b)) / float64(frameSizeBits/8)))
+	fmt.Println("Frames:", totalFramesCnt)
+	totalFrameBytes := int(totalFramesCnt) * frameSizeBits / 8
+	// fmt.Println("Frames bytes size:", totalFrameBytes)
+	digits := int(math.Log10(float64(totalFramesCnt))) + 1 // Calculate number of digits
+	// fmt.Println("Digits:", digits)
+
+	// init progress bar
+	bar := progressbar.NewOptions(int(totalFramesCnt),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetDescription("Encoding..."),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
 
 	bitIndex := 0
-	// for i := 0; i < len(b); i++ {
-	totalFrameBytes := int(framesCnt) * frameSizeBits / 8
-	fmt.Println("Frames bytes size:", totalFrameBytes)
-	// for f := 0; f < framesBytesSize; f++ {
-	// for every byte convert it to 8 bits
-
+	var bitsBuffer [frameSizeBits]bool
 	// range over all frames, more then file len!
 	for i := 0; i < totalFrameBytes; i++ {
+		// for every byte, range over all bits
 		for j := 0; j < 8; j++ {
 			frameNumber := i / (frameSizeBits / 8)
 			shift := frameNumber * frameSizeBits
@@ -158,32 +179,32 @@ func encode(filename string) {
 			// send a copy of bits buffer to goroutine to proccess
 			// panic on errors - missed frames are not allowed
 			if bitIndex == len(bitsBuffer)-1 || bitIndex == len(b)*8-1 {
+				// create filename
+				// prefix filename with dynamic leading zeroes
+				fileName := fmt.Sprintf("tmp/out_%0"+strconv.Itoa(digits)+"d.png", frameNumber)
+
 				wg.Add(1)
-				go func(bitsBuffer [frameSizeBits]bool, fn int) {
+				go func(bitsBuffer [frameSizeBits]bool, fn string) {
 					defer wg.Done()
-					fmt.Println("Proccessing frame in G:", fn)
+					// fmt.Println("Proccessing frame in G:", fn)
 					img := encodeFrame(bitsBuffer)
-					// prefix filename with leading zeroes
-					fileName := fmt.Sprintf("tmp/out_%09d.png", fn+1)
 					save(fileName, img)
-					fmt.Println("Frame done:", fn)
-				}(bitsBuffer, frameNumber)
+					// fmt.Println("Frame done:", fn)
+					bar.Add(1)
+				}(bitsBuffer, fileName)
 			}
 		}
-		// }
 	}
-	fmt.Println("Done")
 }
 
 func encodeFrame(bits [frameSizeBits]bool) *image.NRGBA {
-	fmt.Println("Encoding frame")
-	// generate an image
+	// fmt.Println("Encoding frame")
 
+	// generate an image
 	img := image.NewNRGBA(image.Rect(0, 0, 3840, 2160)) // 4K resolution
 
 	// generate image
-	fmt.Println("filling the image")
-	// rand.Seed(time.Now().UnixNano())
+	// fmt.Println("filling the image")
 	k := 0
 	for x := 0; x < img.Bounds().Dx(); x += 2 {
 		for y := 0; y < img.Bounds().Dy(); y += 2 {
@@ -203,12 +224,6 @@ func encodeFrame(bits [frameSizeBits]bool) *image.NRGBA {
 				col = color.NRGBA{255, 0, 0, 255}
 				fmt.Println("END")
 			}
-			// // generate random int
-			// if rand.Intn(2)%2 == 0 {
-			// 	col = color.White
-			// } else {
-			// 	col = color.Black
-			// }
 			// Set a 2x2 block of pixels to the color.
 			img.Set(x, y, col)
 			img.Set(x+1, y, col)
@@ -217,7 +232,7 @@ func encodeFrame(bits [frameSizeBits]bool) *image.NRGBA {
 		}
 	}
 
-	fmt.Println("Encoding frame done")
+	// fmt.Println("Encoding frame done")
 	return img
 }
 
