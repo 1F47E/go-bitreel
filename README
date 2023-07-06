@@ -1,0 +1,17 @@
+ByteReel
+
+Allows conversion of any file type to a video by encoding the bytes into black and white pixels and back.
+Then upload them to YouTube or Twitter. 
+
+
+TODO:
+- [x] encode file to 1 frame
+- [x] decode file to 1 frame
+- [ ] generate video
+- [ ] decode video
+- [ ] add encryption
+- [ ] add bit rot protection
+- [ ] embed ffmpeg
+- [ ] add masking of the final video with custom image ? 
+
+
