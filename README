@@ -1,7 +1,13 @@
-ByteReel
+__________          __        __________              .__   
+\______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
+ |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
+ |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
+ |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
+        \/ \/                \/       \/     \/     \/
 
-Allows conversion of any file type to a video by encoding the bytes into black and white pixels and back.
-Then upload them to YouTube or Twitter. 
+
+ByteReel converts any file to a video by encoding the bytes into black and white pixels and back.
+Then you can upload them to YouTube or Twitter and have infinate tape storage like in good old days.
 
 
 TODO:
