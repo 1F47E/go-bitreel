@@ -38,19 +38,8 @@ func (c *Core) Decode(dir string) error {
 	fmt.Println("total files:", len(filesList))
 	sort.Strings(filesList)
 
-	// filename with timestamp
-	// outputFilename := "tmp/decoded.bin.txt"
-	// outputFilenameTmp := fmt.Sprintf("tmp/decoded_%d.bin", time.Now().Unix())
-
 	// setup progress bar
 	c.ResetProgress(len(filesList), "Decoding...")
-
-	// create a output file
-	// TODO: get output filename from metadata
-	// f, err := os.Create(outputFilenameTmp)
-	// if err != nil {
-	// 	log.Fatalf("Cannot create file: %s - %v", outputFilenameTmp, err)
-	// }
 
 	// Create a temporary file in the same directory
 	tmpFile, err := os.CreateTemp("", "decoded-")
@@ -59,27 +48,6 @@ func (c *Core) Decode(dir string) error {
 	}
 	defer os.Remove(tmpFile.Name()) // clean up
 
-	// Create the destination file, owerwriting existing ones
-	// tempFilePath := fmt.Sprintf("tmp/decoded_%d.bin", time.Now().Unix())
-	//
-	// err = os.MkdirAll(filepath.Dir(tempFilePath), 0755)
-	// if err != nil {
-	// 	log.Fatal("Cannot create dir:", err)
-	// }
-	// destFile, err := os.Create(outputPath)
-	// if err != nil {
-	// 	log.Fatal("Cannot create file:", err)
-	// }
-	// defer destFile.Close()
-
-	// Open the file for appending. with unixtime
-	// tmpFile, err := os.OpenFile(tempFilePath, os.O_APPEND|os.O_WRONLY, 0644)
-	// if err != nil {
-	// 	log.Fatal("Cannot open file:", err)
-	// }
-	// // defer tmpFile.Close()
-	// defer os.Remove(tmpFile.Name()) // clean up
-
 	var bytesWritten, pixelErrorsCount int
 	var metaTime int64
 	var metaDatetime string
@@ -87,12 +55,23 @@ func (c *Core) Decode(dir string) error {
 	var metaChecksum uint64
 	for _, file := range filesList {
 		// fmt.Println("Decoding", file)
-		frameBytes, cnt := decodeFrame(file)
-		pixelErrorsCount += cnt
+
+		// NOTE:
+		// when decoder reached red area if will no longer write bits to the frameBytes
+		// so we need fileBytesCnt to know how many bytes to write to the file
+		// to slice the data from the frameBytes
+		// fileBytesCnt will include metadata size!
+
+		frameBytes, pErrCnt, fileBytesCnt := decodeFrame(file)
+		pixelErrorsCount += pErrCnt
 
 		// cut metadata
-		data := frameBytes[metadataSizeBits/8:]
-		meta := frameBytes[:metadataSizeBits/8]
+		metadataSizeBytes := metadataSizeBits / 8
+		// substract metadata size from the fileBytesCnt
+		fileBytesCnt -= metadataSizeBytes
+		meta := frameBytes[:metadataSizeBytes]
+		// cut out metadata head and extra tail
+		data := frameBytes[metadataSizeBytes : metadataSizeBytes+fileBytesCnt]
 
 		// write data to the file
 		written, err := tmpFile.Write(data)
@@ -155,11 +134,11 @@ func (c *Core) Decode(dir string) error {
 
 	// close the file so we can rename it
 	// Ensure data is written to disk
-	// err = tmpFile.Sync()
-	// if err != nil {
-	// 	log.Fatal("Cannot sync file:", err)
-	// }
-	//
+	err = tmpFile.Sync()
+	if err != nil {
+		log.Fatal("Cannot sync file:", err)
+	}
+
 	// Close the file before renaming/moving it
 	err = tmpFile.Close()
 	if err != nil {
@@ -181,51 +160,7 @@ func (c *Core) Decode(dir string) error {
 			metaFilename = fmt.Sprintf("%s_%s", metaDatetime, metaFilename)
 		}
 		outputFilename := fmt.Sprintf("decoded_%s", metaFilename)
-		// log filename from metadata by bytes
-		// fmt.Println("Filename from metadata1:", string(metaFilename))
-		// fmt.Println("Filename from metadata2:", metaFilename)
-		// fmt.Println("Filename from metadata2:", []rune(metaFilename))
-		// fmt.Printf("Filename from metadata runes:")
-		// for _, r := range []rune(metaFilename) {
-		// 	fmt.Printf("%c", r)
-		// }
-		// fmt.Println()
-		// outputFilename = "2023-07-07_10-12-35_test.png"
-		// outputFilename = "decoded_2023-07-07_10-12-35_test.png"
 		fmt.Println("Renaming", tmpFile.Name(), "to", outputFilename)
-		// create path to the file
-		err = os.Rename(tmpFile.Name(), outputFilename)
-		if err != nil {
-			log.Fatal("Cannot rename file:", err)
-		}
-
-		// // check curr dir
-		// dir, err := os.Getwd()
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// fmt.Println("Current dir:", dir)
-		//
-		// // outputPath := dir + "/tmp2/" + outputFilename
-		// outputPath := dir + "/tmp2/test.bin"
-		//
-		// err = os.MkdirAll(filepath.Dir(outputPath), 0755)
-		// if err != nil {
-		// 	log.Fatal("Cannot create dir:", err)
-		// }
-		//
-		// // Create the destination file, owerwriting existing ones
-		// destFile, err := os.Create(outputPath)
-		// if err != nil {
-		// 	log.Fatal("Cannot create file:", err)
-		// }
-		// defer destFile.Close()
-		//
-		// // Copy the file contents from source to destination
-		// _, err = io.Copy(destFile, tmpFile)
-		// if err != nil {
-		// 	log.Fatal("Cannot copy file:", err)
-		// }
 		log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, outputFilename)
 		if pixelErrorsCount > 0 {
 			log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
@@ -239,7 +174,7 @@ func (c *Core) Decode(dir string) error {
 }
 
 // TODO: make this a worker
-func decodeFrame(filename string) ([]byte, int) {
+func decodeFrame(filename string) ([]byte, int, int) {
 
 	// read the image
 	file, err := os.Open(filename)
@@ -257,10 +192,12 @@ func decodeFrame(filename string) ([]byte, int) {
 	// Draw the source image onto the new NRGBA image.
 	draw.Draw(img, img.Bounds(), imgRaw, imgRaw.Bounds().Min, draw.Src)
 
-	var bits [frameSizeBits]bool
+	var fileBits [frameSizeBits]bool
 
 	// copy image to bytes
-	var k, cntBlack, cntWhite uint
+	var writeIdx int
+	// black = 1, white = 0, red = EOF
+	var cntBlack, cntWhite, cntRed uint
 	var pixelErrorsCount int
 	for x := 0; x < img.Bounds().Dx(); x += 2 {
 		for y := 0; y < img.Bounds().Dy(); y += 2 {
@@ -274,40 +211,55 @@ func decodeFrame(filename string) ([]byte, int) {
 					// shift 8 bits to the right to have 0-255 range
 					r8, g8, b8 := r>>8, g>>8, b>>8
 
-					if r8 > 128 && g8 > 128 && b8 > 128 {
+					// detect red first
+					if r8 > 128 && g8 < 128 && b8 < 128 {
+						cntRed++
+					} else if r8 > 128 && g8 > 128 && b8 > 128 {
 						cntWhite++
 					} else {
 						cntBlack++
 					}
 				}
 			}
+
+			// skip if reached red section which is EOF
+			// TODO: skip after some time, do not scan till the end of the frame
+			if cntRed > cntBlack && cntRed > cntWhite {
+				// reset counters
+				cntRed = 0
+				cntBlack = 0
+				cntWhite = 0
+				continue
+			}
+
 			if cntBlack > cntWhite {
-				bits[k] = true
+				fileBits[writeIdx] = true
 				if cntBlack != 4 {
 					// fmt.Println("Error at black ", x, y, cntBlack, cntWhite)
 					pixelErrorsCount++
 				}
 			} else {
-				bits[k] = false
+				fileBits[writeIdx] = false
 				if cntWhite != 4 {
 					// fmt.Println("Error at white ", x, y, cntBlack, cntWhite)
 					pixelErrorsCount++
 				}
 			}
+			cntRed = 0
 			cntBlack = 0
 			cntWhite = 0
-			k++
+			writeIdx++
 		}
 	}
 
 	// 4k video is 3840x2160 = 8294400 pixels = 2073600 4px blocks
 	// every frame should have 2073600 bits
 	// convert bits to bytes
-	bytes := make([]byte, len(bits)/8)
-	for i := 0; i < len(bits); i += 8 {
+	bytes := make([]byte, len(fileBits)/8)
+	for i := 0; i < len(fileBits); i += 8 {
 		var b byte
 		for j := 0; j < 8; j++ {
-			if bits[i+j] {
+			if fileBits[i+j] {
 				b |= 1 << uint(j)
 			}
 		}
@@ -315,6 +267,6 @@ func decodeFrame(filename string) ([]byte, int) {
 	}
 	// fmt.Println("bytes len:", len(bytes))
 
-	return bytes, pixelErrorsCount
-
+	writtenBytes := writeIdx / 8
+	return bytes, pixelErrorsCount, writtenBytes
 }

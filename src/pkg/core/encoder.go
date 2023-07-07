@@ -128,7 +128,7 @@ func (c *Core) Encode(path string) error {
 		// send copy of the buffer to pixel processing
 		c.Wg.Add(1)
 		go func(buf [frameBufferSizeBits]bool, bi int, fn int) {
-			// bi - bit index needed to know how many bits to process
+			// bi - included metadata size
 			// at the end this number will be < frameBufferSizeBits
 			// so we can mark the end of the file
 			defer c.Wg.Done()
@@ -142,9 +142,12 @@ func (c *Core) Encode(path string) error {
 			// Encoding bits to image - around 1.5s
 			fmt.Println("Frame start:", fn)
 			img := encodeFrame(buf, bi)
-			if bi < frameBufferSizeBits-metadataSizeBits-1 {
+			limit := frameBufferSizeBits
+			if bi < limit {
 				// log the end
-				fmt.Println("END OF FILE DETECTED. frame:", fn, ", bits processed:", bi, "buff size:", frameBufferSizeBits)
+				fmt.Println("END OF FILE DETECTED. frame:", fn)
+				// lot bits and bytes proccessed on the frame
+				fmt.Printf("bits processed: %d, bytes: %d, frameSizeBits: %d, limit bits: %d, limit bytes: %d\n", bi, bi/8, frameBufferSizeBits, limit, limit/8)
 			}
 			fmt.Println("Frame done:", fn, "time:", time.Since(now), "bits processed:", bi)
 
@@ -198,29 +201,15 @@ func encodeFrame(bits [frameBufferSizeBits]bool, bitIndex int) *image.NRGBA {
 	var col color.Color
 	for x := 0; x < img.Bounds().Dx(); x += 2 {
 		for y := 0; y < img.Bounds().Dy(); y += 2 {
-			// var col color.Color
-			// set red color as default background
-			// col := color.NRGBA{255, 0, 0, 255}
-			// TODO: check if the end of the file
 			// detect end of file
-			// if k < bitIndex { // BUG: always true
-			// 	col = color.NRGBA{255, 0, 0, 255}
-			// } else {
-			// 	col = color.NRGBA{0, 255, 0, 255}
-			// }
-
-			// detect end of file
-			if writeIdx < bitIndex { // BUG: always true
+			if writeIdx <= bitIndex {
 				if bits[writeIdx] {
-					// black color
-					col = color.NRGBA{0, 0, 0, 255}
+					col = color.NRGBA{0, 0, 0, 255} // black
 				} else {
-					// white color
-					col = color.NRGBA{255, 255, 255, 255}
+					col = color.NRGBA{255, 255, 255, 255} // white
 				}
 			} else {
-				col = color.NRGBA{255, 0, 0, 255}
-				// fmt.Println("END")
+				col = color.NRGBA{255, 0, 0, 255} // red
 			}
 			// Set a 2x2 block of pixels to the color.
 			img.Set(x, y, col)

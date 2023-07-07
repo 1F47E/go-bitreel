@@ -13,18 +13,20 @@ Then you can upload them to YouTube or Twitter and have infinate tape storage li
 TODO:
 - [x] encode file to frames
 - [x] decode file to frames
+- [x] save original filename
+- [x] add metadata to every frame at the top
+- [x] add checksum to frames at the end
+- [x] detect and of the file
+- [x] add bit rot protection - sort of. count pixels in a square
+- [ ] check checksum on decode
+- [ ] add workers, limit to cpu cores
 - [ ] rum ffmpeg from the code
-- [x] generate video
-- [x] decode video
-- [ ] add config to change pixel size for robustness
-- [ ] save original filename
-- [ ] add metadata to every frame at the top
-- [ ] add checksum to frames at the end
-- [ ] detect and of the file
+- [ ] generate video
+- [ ] decode video
 - [ ] add encryption
-- [ ] add bit rot protection
 - [ ] embed ffmpeg
 - [ ] add masking of the final video with custom image ? 
+- [ ] add config to change pixel size for robustness
 
 
 
