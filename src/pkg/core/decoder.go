@@ -3,8 +3,6 @@ package core
 import (
 	"encoding/binary"
 	"fmt"
-	"image"
-	"image/draw"
 	"image/png"
 	"log"
 	"os"
@@ -248,15 +246,10 @@ func decodeFrame(filename string) ([]byte, int, int) {
 		log.Fatal("Cannot open file:", err)
 	}
 	defer file.Close()
-	imgRaw, err := png.Decode(file)
+	img, err := png.Decode(file)
 	if err != nil {
 		log.Fatal("Cannot decode file:", err)
 	}
-	// TODO: test later is this needed
-	// Create an empty NRGBA image with the same size as the source image.
-	img := image.NewNRGBA(imgRaw.Bounds())
-	// Draw the source image onto the new NRGBA image.
-	draw.Draw(img, img.Bounds(), imgRaw, imgRaw.Bounds().Min, draw.Src)
 
 	var fileBits [frameSizeBits]bool
 

@@ -183,9 +183,7 @@ func (c *Core) Encode(path string) error {
 	c.Wg.Wait()
 
 	// VIDEO ENCODING
-	// c.ResetProgress(-1, "Saving video...") // set as spinner
-	// c.progress.Describe("Saving video...")
-	// c.progress.ChangeMax(-1)
+	// setup progress bar async, otherwise it wont animate
 	c.ResetProgress(-1, "Saving video...")
 	done := make(chan bool)
 	go func(done <-chan bool) {
@@ -193,7 +191,7 @@ func (c *Core) Encode(path string) error {
 		for {
 			select {
 			case <-ticker.C:
-				c.progress.Add(1)
+				_ = c.progress.Add(1)
 			case <-done:
 				return
 			}
@@ -211,7 +209,7 @@ func (c *Core) Encode(path string) error {
 		panic(fmt.Sprintf("Error running ffmpeg cmd: %s: %s", cmdStr, err))
 	}
 	done <- true
-	c.progress.Clear()
+	_ = c.progress.Clear()
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
