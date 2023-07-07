@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytereel/pkg/core"
 	"bytes"
 	"fmt"
 	"image"
@@ -10,8 +11,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
-	"strconv"
 	"sync"
 
 	"github.com/schollz/progressbar/v3"
@@ -26,86 +25,29 @@ var wg sync.WaitGroup
 func main() {
 	// read cmd line args
 	args := os.Args[1:]
-	if len(args) == 0 {
-		log.Fatal("No file given")
+	if len(args) < 2 {
+		log.Fatal("d dir - decode pics in a dir, e file - encode a file")
 	}
-	file := args[0]
+	command := args[0]
+	arg := args[1]
 
-	// get file extension via filePath
-	ext := filepath.Ext(file)
-	if ext == ".png" {
-		decode(file)
-	} else {
-		encode(file)
+	// get command
+	if command == "d" {
+		fmt.Println("Decoding")
+		err := core.Decode(arg)
+		if err != nil {
+			log.Fatalf("Error decoding video: %v", err)
+		}
+	} else if command == "e" {
+		fmt.Println("Encoding")
+		encode(arg)
+		// err := processor.Encode(arg)
+		// if err != nil {
+		// 	log.Fatalf("Error encoding video: %v", err)
+		// }
 	}
 
 	wg.Wait()
-}
-
-func decode(filename string) {
-	fmt.Println("Decoding")
-
-	// read the image
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Fatal("Cannot open file:", err)
-	}
-	defer file.Close()
-	img, err := png.Decode(file)
-	if err != nil {
-		log.Fatal("Cannot decode file:", err)
-	}
-
-	bits := make([]bool, 0)
-
-	// copy image to bytes
-	// TODO: read all 4 pixels and decide if black or white on majority
-	for x := 0; x < img.Bounds().Dx(); x += 2 {
-		for y := 0; y < img.Bounds().Dy(); y += 2 {
-			// get color of pixel
-			col := img.At(x, y)
-			r, g, b, _ := col.RGBA()
-
-			// white = {255 255 255 255}
-			// black = {0 0 0 255}
-			isBlack := r == 0 && g == 0 && b == 0
-			isWhite := r == 0xFFFF && g == 0xFFFF && b == 0xFFFF
-
-			if isBlack {
-				bits = append(bits, true)
-			} else if isWhite {
-				bits = append(bits, false)
-			}
-		}
-		// fmt.Println("bits len:", len(bits))
-		// fmt.Println("bits:", bits)
-	}
-	// convert bits to bytes
-	bytes := make([]byte, len(bits)/8)
-	for i := 0; i < len(bits); i += 8 {
-		var b byte
-		for j := 0; j < 8; j++ {
-			if bits[i+j] {
-				b |= 1 << uint(j)
-			}
-		}
-		bytes[i/8] = b
-	}
-
-	// write bytes to file
-	ext := filepath.Ext(filename)
-	outputFilename := fmt.Sprintf("decoded%s", ext)
-	file, err = os.Create(outputFilename)
-	if err != nil {
-		log.Fatal("Cannot create file:", err)
-	}
-	defer file.Close()
-	_, err = file.Write(bytes)
-	if err != nil {
-		log.Fatal("Cannot write to file:", err)
-	}
-	log.Println("Done")
-
 }
 
 func encode(filename string) {
@@ -143,7 +85,7 @@ func encode(filename string) {
 	fmt.Println("Frames:", totalFramesCnt)
 	totalFrameBytes := int(totalFramesCnt) * frameSizeBits / 8
 	// fmt.Println("Frames bytes size:", totalFrameBytes)
-	digits := int(math.Log10(float64(totalFramesCnt))) + 1 // Calculate number of digits
+	// digits := int(math.Log10(float64(totalFramesCnt))) + 1 // Calculate number of digits
 	// fmt.Println("Digits:", digits)
 
 	// init progress bar
@@ -181,7 +123,8 @@ func encode(filename string) {
 			if bitIndex == len(bitsBuffer)-1 || bitIndex == len(b)*8-1 {
 				// create filename
 				// prefix filename with dynamic leading zeroes
-				fileName := fmt.Sprintf("tmp/out_%0"+strconv.Itoa(digits)+"d.png", frameNumber)
+				// fileName := fmt.Sprintf("tmp/out_%0"+strconv.Itoa(digits)+"d.png", frameNumber)
+				fileName := fmt.Sprintf("tmp/out/out_%d.png", frameNumber)
 
 				wg.Add(1)
 				go func(bitsBuffer [frameSizeBits]bool, fn string) {
@@ -206,11 +149,12 @@ func encodeFrame(bits [frameSizeBits]bool) *image.NRGBA {
 	// generate image
 	// fmt.Println("filling the image")
 	k := 0
+	var col color.Color
 	for x := 0; x < img.Bounds().Dx(); x += 2 {
 		for y := 0; y < img.Bounds().Dy(); y += 2 {
 			// var col color.Color
 			// set red color as default background
-			col := color.NRGBA{255, 0, 0, 255}
+			// col := color.NRGBA{255, 0, 0, 255}
 			if k < len(bits) { // BUG: always true
 				if bits[k] {
 					// col = color.Black
