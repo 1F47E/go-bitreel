@@ -17,8 +17,6 @@ import (
 )
 
 func (c *Core) Encode(path string) error {
-
-	// get only filename
 	// open a file
 	file, err := os.Open(path)
 	if err != nil {
@@ -55,6 +53,8 @@ func (c *Core) Encode(path string) error {
 			log.Println("Error reading file:", err)
 			return err
 		}
+
+		// TODO: run a job for a worker here
 
 		// METADATA - CHECKSUM, 64 bits
 		// create checksum hash - 8bytes, 64bits

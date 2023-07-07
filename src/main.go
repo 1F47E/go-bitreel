@@ -16,7 +16,7 @@ func main() {
 	command := args[0]
 	arg := args[1]
 	if command == "d" {
-		err := c.Decode(arg)
+		_, err := c.Decode(arg)
 		if err != nil {
 			log.Fatalf("Error decoding video: %v", err)
 		}
@@ -24,6 +24,28 @@ func main() {
 		err := c.Encode(arg)
 		if err != nil {
 			log.Fatalf("Error encoding video: %v", err)
+		}
+	} else if command == "test" {
+		// encode + decode + compare
+		err := c.Encode(arg)
+		if err != nil {
+			log.Fatalf("Error encoding video: %v", err)
+		}
+		videoFile := "tmp/out.mov"
+		out, err := c.Decode(videoFile)
+		if err != nil {
+			log.Fatalf("Error decoding video: %v", err)
+		}
+		// compare files
+		same, err := c.Compare(arg, out)
+		if err != nil {
+			log.Fatalf("Error comparing files: %v", err)
+		}
+		// assert if not same
+		if !same {
+			log.Fatalf("Error: files are not the same")
+		} else {
+			log.Println("Success: files are the same")
 		}
 	}
 

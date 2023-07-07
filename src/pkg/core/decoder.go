@@ -12,8 +12,9 @@ import (
 	"time"
 )
 
-func (c *Core) Decode(videoFile string) error {
+func (c *Core) Decode(videoFile string) (string, error) {
 	var err error
+	var out string
 
 	c.ResetProgress(-1, "Decoding video...") // spinner
 
@@ -24,7 +25,7 @@ func (c *Core) Decode(videoFile string) error {
 	err = os.MkdirAll(framesDir, os.ModePerm)
 	if err != nil {
 		// panic(fmt.Sprintf("Error creating dir: %s", err))
-		return fmt.Errorf("Error creating frames dir: %s", err)
+		return out, fmt.Errorf("Error creating frames dir: %s", err)
 	}
 
 	// NOTE: total frames count is unknown at this point
@@ -38,9 +39,8 @@ func (c *Core) Decode(videoFile string) error {
 	framesPath := framesDir + "/out_%08d.png"
 	// Call ffmpeg to decode the video into frames
 	cmdStr := fmt.Sprintf("ffmpeg -y -i %s %s", videoFile, framesPath)
-
 	cmdList := strings.Split(cmdStr, " ")
-	fmt.Println("Running ffmpeg command:", cmdStr)
+	// fmt.Println("Running ffmpeg command:", cmdStr)
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	err = cmd.Run()
 	if err != nil {
@@ -54,7 +54,7 @@ func (c *Core) Decode(videoFile string) error {
 	// scan the directory for files
 	files, err := os.ReadDir(framesDir)
 	if err != nil {
-		return err
+		return out, err
 	}
 	// filter out files
 	filesList := make([]string, 0, len(files))
@@ -164,6 +164,8 @@ func (c *Core) Decode(videoFile string) error {
 	if pixelErrorsCount > 0 {
 		log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
 	}
+	// will try to replace it with the original file filename from metadata
+	out = tmpFile.Name()
 
 	// check metadata
 	// report time from metadata
@@ -179,25 +181,27 @@ func (c *Core) Decode(videoFile string) error {
 		if metaDatetime != "" {
 			metaFilename = fmt.Sprintf("%s_%s", metaDatetime, metaFilename)
 		}
-		outputFilename := fmt.Sprintf("decoded_%s", metaFilename)
-		// do rename
-		err = os.Rename(tmpFile.Name(), outputFilename)
-		if err != nil {
-			log.Println("Cant rename a file to ", outputFilename)
-			return err
-		}
-		log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, outputFilename)
+		// outputFilename := fmt.Sprintf("decoded_%s", metaFilename)
+		out = fmt.Sprintf("decoded_%s", metaFilename)
 
 	} else {
 		fmt.Println("No filename found in metadata")
 	}
 
+	// do rename
+	err = os.Rename(tmpFile.Name(), out)
+	if err != nil {
+		log.Println("Cant rename a file to ", out)
+		return out, err
+	}
+	log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, out)
+
 	// cleanup frames dir
-	// err = os.RemoveAll(framesDir)
-	// if err != nil {
-	// 	fmt.Println("!!! Cannot remove frames dir:", err)
-	// }
-	return nil
+	err = os.RemoveAll(framesDir)
+	if err != nil {
+		fmt.Println("!!! Cannot remove frames dir:", err)
+	}
+	return out, nil
 }
 
 // decoding video to frames progress runner
