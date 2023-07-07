@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -155,7 +156,12 @@ func (c *Core) Encode(path string) error {
 			now = time.Now()
 			fmt.Println("Save start:", fn)
 			fileName := fmt.Sprintf("tmp/out/out_%08d.png", fn)
-			save(fileName, img)
+			err = save(fileName, img)
+			if err != nil {
+				log.Println("Error saving file:", err)
+				// NOTE: no need to continue if we can't save the file
+				panic(fmt.Sprintf("EXITING!\n\n\nError saving file: %s", err))
+			}
 			fmt.Println("Save done. Took time:", time.Since(now))
 			// fmt.Println("Frame done:", fn)
 
@@ -163,6 +169,27 @@ func (c *Core) Encode(path string) error {
 
 		frameNumber++
 	}
+	// wait for all the files to be processed
+	c.Wg.Wait()
+
+	// VIDEO ENCODING
+	fmt.Println("Frames done, encoding video")
+	// Call ffmpeg to decode the video into frames
+	videoPath := "tmp/out.mov"
+	cmdStr := "ffmpeg -y -framerate 30 -i tmp/out/out_%08d.png -c:v prores -profile:v 3 -pix_fmt yuv422p10 " + videoPath
+	cmdList := strings.Split(cmdStr, " ")
+	fmt.Println("Running ffmpeg command:", cmdStr)
+	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	err = cmd.Run()
+	if err != nil {
+		panic(fmt.Sprintf("Error running ffmpeg: %s", err))
+	}
+	// clean up tmp/out dir
+	err = os.RemoveAll("tmp/out")
+	if err != nil {
+		panic(fmt.Sprintf("Error removing tmp/out dir: %s", err))
+	}
+	fmt.Println("Video encoded")
 
 	return nil
 }
@@ -225,16 +252,27 @@ func encodeFrame(bits [frameBufferSizeBits]bool, bitIndex int) *image.NRGBA {
 }
 
 // TODO: make this a worker
-func save(filePath string, img *image.NRGBA) {
+func save(filePath string, img *image.NRGBA) error {
+	// make sure dir exists - create all
+	err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm)
+	if err != nil {
+		log.Println("Cannot create dir:", err)
+		// panic(fmt.Sprintf("Cannot create dir: %s", err))
+		return fmt.Errorf("Cannot create tmp out dir for path %s: %s", filePath, err)
+	}
+
 	imgFile, err := os.Create(filePath)
 	defer imgFile.Close()
 	if err != nil {
 		log.Println("Cannot create file:", err)
-		panic(fmt.Sprintf("Cannot create file: %s", err))
+		// panic(fmt.Sprintf("Cannot create file: %s", err))
+		return fmt.Errorf("Cannot create file: %s", err)
 	}
 	err = png.Encode(imgFile, img.SubImage(img.Rect))
 	if err != nil {
 		log.Println("Cannot encode to file:", err)
-		panic(fmt.Sprintf("Cannot encode to file: %s", err))
+		// panic(fmt.Sprintf("Cannot encode to file: %s", err))
+		return fmt.Errorf("Cannot encode to file: %s", err)
 	}
+	return nil
 }
