@@ -8,9 +8,10 @@ import (
 
 // Amount of bits in 1 4k frame
 // 3840*2160/4 = 2073600
-// const frameSizeBits = 2073600
+// const frameSizeBits = 2073600 bits
 const frameWidth = 3840
 const frameHeight = 2160
+const frameFileSize = 7684000 // estimated
 
 const pixelSize = 4
 

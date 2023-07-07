@@ -61,16 +61,16 @@ func (c *Core) Encode(path string) error {
 		binary.BigEndian.PutUint64(checksumBytes, checksum)
 		// checksumBits := make([]bool, 64)
 		checksumBits := bytesToBits(checksumBytes)
-		fmt.Println("checksum", checksum)
-		printBits(checksumBits)
+		// fmt.Println("checksum", checksum)
+		// printBits(checksumBits)
 
 		// METADATA - timestamp, 64 bits
 		timestamp := time.Now().Unix()
 		timeBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(timeBytes, uint64(timestamp))
 		timeBits := bytesToBits(timeBytes)
-		fmt.Println("timestamp", timestamp)
-		printBits(timeBits)
+		// fmt.Println("timestamp", timestamp)
+		// printBits(timeBits)
 
 		// FILENAME
 		filename := path[strings.LastIndex(path, "/")+1:]
@@ -83,8 +83,8 @@ func (c *Core) Encode(path string) error {
 		// add marker to the end of the filename so on decoding we know the length
 		filename += "/"
 		filenameBits := bytesToBits([]byte(filename))
-		fmt.Println("filename", filename)
-		printBits(filenameBits)
+		// fmt.Println("filename", filename)
+		// printBits(filenameBits)
 
 		// create bits buffer
 		var bufferBits [frameBufferSizeBits]bool
@@ -99,8 +99,8 @@ func (c *Core) Encode(path string) error {
 		l = s + len(filenameBits)
 		copy(bufferBits[s:l], filenameBits[:])
 		// panic("debug")
-		fmt.Println("metadata header bits:")
-		printBits(bufferBits[:metadataSizeBits])
+		// fmt.Println("metadata header bits:")
+		// printBits(bufferBits[:metadataSizeBits])
 
 		// start filling data after medata size
 		var bitIndex int
@@ -184,6 +184,7 @@ func (c *Core) Encode(path string) error {
 	if err != nil {
 		panic(fmt.Sprintf("Error running ffmpeg: %s", err))
 	}
+
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
 	if err != nil {
