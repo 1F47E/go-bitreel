@@ -28,13 +28,14 @@ func (c *Core) Encode(path string) error {
 	defer file.Close()
 
 	// read file by chunks into the buffer
-	bufferSize := frameSizeBits / 8
-	buffer := make([]byte, bufferSize)
+	// NOTE: read into buffer smaller then a frame to leave space for metadata
+	bufferSize := frameSizeBits/8 - metadataSizeBits/8
+	readBuffer := make([]byte, bufferSize)
 
 	var frameNumber int
 	for {
 		// read chunk of bytes into the buffer
-		n, err := file.Read(buffer)
+		n, err := file.Read(readBuffer)
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -48,7 +49,7 @@ func (c *Core) Encode(path string) error {
 		hasher := fnv.New64a() // FNV-1a hash
 		// Pass sliced buffer slice to hasher, no copy
 		// also important to pass n - number of bytes read in case of last chunk
-		_, err = hasher.Write(buffer[:n])
+		_, err = hasher.Write(readBuffer[:n])
 		if err != nil {
 			log.Println("Error writing to hasher:", err)
 			return err
@@ -78,6 +79,8 @@ func (c *Core) Encode(path string) error {
 		if len(filename) > maxLen {
 			filename = fmt.Sprintf("%s--%s", filename[:maxLen], ext)
 		}
+		// add marker to the end of the filename so on decoding we know the length
+		filename += "/"
 		filenameBits := bytesToBits([]byte(filename))
 		fmt.Println("filename", filename)
 		printBits(filenameBits)
@@ -103,9 +106,11 @@ func (c *Core) Encode(path string) error {
 		// NOTE: n is the number of bytes read from the file in the last chunk.
 		// if not slice with n, the last chunk will be filled with previous data
 		// because we reuse the buffer
-		for i := 0; i < len(buffer[:n]); i++ {
+		for i := 0; i < len(readBuffer[:n]); i++ {
 			// for every byte, range over all bits
 			for j := 0; j < 8; j++ {
+				// shift by metadata size header
+				// calc the bit index
 				bitIndex = metadataSizeBits + i*8 + j
 				// get the current bit of the byte
 				// buf[i]:     0 1 1 0 1 0 0 1
@@ -115,7 +120,7 @@ func (c *Core) Encode(path string) error {
 				// result:     0 0 0 0 1 0 0 0  (bitwise AND operation)
 				//					   ^
 				// write the bit to the buffer
-				bufferBits[bitIndex] = (buffer[i] & (1 << uint(j))) != 0
+				bufferBits[bitIndex] = (readBuffer[i] & (1 << uint(j))) != 0
 			}
 		}
 		// bitesWriten := bitIndex - metadataSizeBits
@@ -137,7 +142,7 @@ func (c *Core) Encode(path string) error {
 			// Encoding bits to image - around 1.5s
 			fmt.Println("Frame start:", fn)
 			img := encodeFrame(buf, bi)
-			if bi < frameBufferSizeBits-1 {
+			if bi < frameBufferSizeBits-metadataSizeBits-1 {
 				// log the end
 				fmt.Println("END OF FILE DETECTED. frame:", fn, ", bits processed:", bi, "buff size:", frameBufferSizeBits)
 			}
