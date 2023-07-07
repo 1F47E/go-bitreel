@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"image"
 	"image/color"
@@ -9,7 +8,6 @@ import (
 	"image/png"
 	"io"
 	"log"
-	"math"
 	"os"
 	"sort"
 	"strings"
@@ -39,7 +37,6 @@ func NewCore() *Core {
 func (c *Core) ResetProgress(max int, desc string) {
 	c.progress = progressbar.NewOptions(max,
 		progressbar.OptionSetDescription(desc),
-		// progressbar.OptionFullWidth(),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
@@ -54,7 +51,7 @@ func (c *Core) ResetProgress(max int, desc string) {
 func (c *Core) Encode(filename string) error {
 	c.ResetProgress(-1, "Encoding...") // set as spinner
 
-	// open a file and read to bytes
+	// open a file
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Println("Error opening file:", err)
@@ -62,70 +59,69 @@ func (c *Core) Encode(filename string) error {
 	}
 	defer file.Close()
 
-	// TODO: stream file data, not copy to buffer
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, file)
-	if err != nil {
-		log.Fatal(err)
-		return err
-	}
+	// read file by chunks into the buffer
+	bufferSize := frameSizeBits / 8
+	buffer := make([]byte, bufferSize)
 
-	b := buf.Bytes()
-
-	// print the size
-	// fmt.Print("File size: ")
-	// if len(b) > 1024 {
-	// 	fmt.Printf("%d %s\n", len(b)/1024, "KB")
-	// } else if len(b) > 1024*1024 {
-	// 	fmt.Printf("%d %s\n", len(b)/1024/1024, "MB")
-	// } else if len(b) > 1024*1024*1024 {
-	// 	fmt.Printf("%d %s\n", len(b)/1024/1024/1024, "GB")
-	// } else {
-	// 	fmt.Printf("%d %s\n", len(b), "Bytes")
-	// }
-
-	// calc amount of frames and frame size
-	totalFramesCnt := int(math.Ceil(float64(len(b)) / float64(frameSizeBits/8)))
-	fmt.Println("Frames:", totalFramesCnt)
-	totalFrameBytes := int(totalFramesCnt) * frameSizeBits / 8
-	c.ResetProgress(totalFramesCnt, "Encoding...") // set as spinner
-
-	bitIndex := 0
-	var bitsBuffer [frameSizeBits]bool
-	// range over all frames, more then file len!
-	for i := 0; i < totalFrameBytes; i++ {
-		// for every byte, range over all bits
-		for j := 0; j < 8; j++ {
-			frameNumber := i / (frameSizeBits / 8)
-			shift := frameNumber * frameSizeBits
-			bitIndex = i*8 + j - shift // should reset to 0 on every frame
-			// if we have more bytes than needed, fill the rest with 0
-			if i >= len(b) {
-				bitsBuffer[bitIndex] = false
-			} else {
-				bitsBuffer[bitIndex] = (b[i] & (1 << uint(j))) != 0
+	var frameNumber int
+	for {
+		// read chunk of bytes into the buffer
+		_, err := file.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
 			}
+			log.Println("Error reading file:", err)
+			return err
+		}
 
-			// detect the end of the file or the end of the frame
-			// proccess the image, save, reset the buffer
-			// send a copy of bits buffer to goroutine to proccess
-			// panic on errors - missed frames are not allowed
-			if bitIndex == len(bitsBuffer)-1 || bitIndex == len(b)*8-1 {
-				// create filename
-				fileName := fmt.Sprintf("tmp/out/out_%08d.png", frameNumber)
-
-				c.Wg.Add(1)
-				go func(bitsBuffer [frameSizeBits]bool, fn string) {
-					defer c.Wg.Done()
-					// fmt.Println("Proccessing frame in G:", fn)
-					img := encodeFrame(bitsBuffer)
-					save(fileName, img)
-					// fmt.Println("Frame done:", fn)
-					_ = c.progress.Add(1)
-				}(bitsBuffer, fileName)
+		// fill the bits buffer
+		var bufferBits [frameSizeBits]bool
+		bitIndex := 0
+		for i := 0; i < len(buffer); i++ {
+			// for every byte, range over all bits
+			for j := 0; j < 8; j++ {
+				bitIndex = i*8 + j
+				// get the current bit of the byte
+				// buf[i]:     0 1 1 0 1 0 0 1
+				// (1<<j):     0 0 0 0 1 0 0 0  (1 has been shifted left 3 times)
+				//					   ^
+				// --------------------------------
+				// result:     0 0 0 0 1 0 0 0  (bitwise AND operation)
+				//					   ^
+				bufferBits[bitIndex] = (buffer[i] & (1 << uint(j))) != 0
 			}
 		}
+
+		// send copy of the buffer to pixel processing
+		c.Wg.Add(1)
+		go func(buf [frameSizeBits]bool, fn int) {
+			defer c.Wg.Done()
+
+			_ = c.progress.Add(1)
+
+			// fmt.Println("Proccessing frame in G:", fn)
+			now := time.Now()
+
+			// TODO: split into separate goroutines
+			// Encoding bits to image - around 1.5s
+			fmt.Println("Frame start:", fn)
+			img := encodeFrame(buf)
+			fmt.Println("Frame done:", fn, "time:", time.Since(now))
+
+			// Saving image to file - around 7s
+			now = time.Now()
+			fmt.Println("Save start:", fn)
+			fileName := fmt.Sprintf("tmp/out/out_%08d.png", fn)
+			save(fileName, img)
+			fmt.Println("Save done. Took time:", time.Since(now))
+			// fmt.Println("Frame done:", fn)
+
+		}(bufferBits, frameNumber)
+
+		frameNumber++
 	}
+
 	return nil
 }
 
