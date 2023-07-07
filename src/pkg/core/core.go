@@ -44,6 +44,10 @@ func NewCore() *Core {
 
 // reinit progress bar becuase of some bug
 func (c *Core) ResetProgress(max int, desc string) {
+	if c.progress != nil {
+		c.progress.Clear()
+		c.progress.Reset()
+	}
 	c.progress = progressbar.NewOptions(max,
 		progressbar.OptionSetDescription(desc),
 		progressbar.OptionEnableColorCodes(true),

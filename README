@@ -6,18 +6,31 @@ __________          __        __________              .__
         \/ \/                \/       \/     \/     \/
 
 
-ByteReel converts any file to a video by encoding the bytes into black and white pixels and back.
-Then you can upload them to YouTube or Twitter and have infinate tape storage like in good old days.
+ByteReel transforms any file to a video file.
+Then you can upload it to video hosting and have tape storage like in good old days.
+
+How it works
+
+Encoding file to a video is done by representing every bit as a black (1) or white (0) 2x2 pixels square.
+Due to this process, the resulting video will be approximately 4 times the size of your original file
+A checksum for each frame is calculated and incorporated as metadata, ensuring the integrity of your data.
+The final step involves encoding these frames into a video using ffmpeg
+
+Dependencies:
+
+- ffmpeg
 
 
-TODO:
+
+TODO
+
 - [x] encode file to frames
 - [x] decode file from frames
 - [x] save original filename
 - [x] add metadata to every frame at the top
 - [x] add checksum to frames at the end
-- [x] detect and of the file
-- [x] add bit rot protection - sort of. count pixels in a square
+- [x] detect end of the file
+- [x] add bit rot protection - counting dominant pixels in a square
 - [x] run ffmpeg from the code
 - [x] generate video
 - [x] decode video

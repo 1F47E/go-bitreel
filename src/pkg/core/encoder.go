@@ -17,7 +17,6 @@ import (
 )
 
 func (c *Core) Encode(path string) error {
-	c.ResetProgress(-1, "Encoding...") // set as spinner
 
 	// get only filename
 	// open a file
@@ -28,11 +27,23 @@ func (c *Core) Encode(path string) error {
 	}
 	defer file.Close()
 
-	// read file by chunks into the buffer
 	// NOTE: read into buffer smaller then a frame to leave space for metadata
 	bufferSize := frameSizeBits/8 - metadataSizeBits/8
 	readBuffer := make([]byte, bufferSize)
 
+	// Progress bar with frames count progress
+	// get total file size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Println("Error getting file info:", err)
+		return err
+	}
+	size := fileInfo.Size()
+	estimatedFrames := int(int(size) / len(readBuffer))
+	c.ResetProgress(estimatedFrames, "Encoding...") // set as spinner
+	_ = c.progress.Add(1)
+
+	// read file by chunks into the buffer
 	var frameNumber int
 	for {
 		// read chunk of bytes into the buffer
@@ -134,27 +145,25 @@ func (c *Core) Encode(path string) error {
 			// so we can mark the end of the file
 			defer c.Wg.Done()
 
-			_ = c.progress.Add(1)
-
 			// fmt.Println("Proccessing frame in G:", fn)
-			now := time.Now()
+			// now := time.Now()
 
 			// TODO: split into separate goroutines
 			// Encoding bits to image - around 1.5s
-			fmt.Println("Frame start:", fn)
+			// fmt.Println("Frame start:", fn)
 			img := encodeFrame(buf, bi)
-			limit := frameBufferSizeBits
-			if bi < limit {
-				// log the end
-				fmt.Println("END OF FILE DETECTED. frame:", fn)
-				// lot bits and bytes proccessed on the frame
-				fmt.Printf("bits processed: %d, bytes: %d, frameSizeBits: %d, limit bits: %d, limit bytes: %d\n", bi, bi/8, frameBufferSizeBits, limit, limit/8)
-			}
-			fmt.Println("Frame done:", fn, "time:", time.Since(now), "bits processed:", bi)
+			// limit := frameBufferSizeBits
+			// if bi < limit {
+			// 	// log the end
+			// 	fmt.Println("END OF FILE DETECTED. frame:", fn)
+			// 	// lot bits and bytes proccessed on the frame
+			// 	fmt.Printf("bits processed: %d, bytes: %d, frameSizeBits: %d, limit bits: %d, limit bytes: %d\n", bi, bi/8, frameBufferSizeBits, limit, limit/8)
+			// }
+			// fmt.Println("Frame done:", fn, "time:", time.Since(now), "bits processed:", bi)
 
 			// Saving image to file - around 7s
-			now = time.Now()
-			fmt.Println("Save start:", fn)
+			// now = time.Now()
+			// fmt.Println("Save start:", fn)
 			fileName := fmt.Sprintf("tmp/out/out_%08d.png", fn)
 			err = save(fileName, img)
 			if err != nil {
@@ -162,7 +171,8 @@ func (c *Core) Encode(path string) error {
 				// NOTE: no need to continue if we can't save the file
 				panic(fmt.Sprintf("EXITING!\n\n\nError saving file: %s", err))
 			}
-			fmt.Println("Save done. Took time:", time.Since(now))
+			_ = c.progress.Add(1)
+			// fmt.Println("Save done. Took time:", time.Since(now))
 			// fmt.Println("Frame done:", fn)
 
 		}(bufferBits, bitIndex, frameNumber)
@@ -173,24 +183,42 @@ func (c *Core) Encode(path string) error {
 	c.Wg.Wait()
 
 	// VIDEO ENCODING
-	fmt.Println("Frames done, encoding video")
+	// c.ResetProgress(-1, "Saving video...") // set as spinner
+	// c.progress.Describe("Saving video...")
+	// c.progress.ChangeMax(-1)
+	c.ResetProgress(-1, "Saving video...")
+	done := make(chan bool)
+	go func(done <-chan bool) {
+		ticker := time.NewTicker(time.Millisecond * 300)
+		for {
+			select {
+			case <-ticker.C:
+				c.progress.Add(1)
+			case <-done:
+				return
+			}
+		}
+	}(done)
+
 	// Call ffmpeg to decode the video into frames
 	videoPath := "tmp/out.mov"
 	cmdStr := "ffmpeg -y -framerate 30 -i tmp/out/out_%08d.png -c:v prores -profile:v 3 -pix_fmt yuv422p10 " + videoPath
 	cmdList := strings.Split(cmdStr, " ")
-	fmt.Println("Running ffmpeg command:", cmdStr)
+	// fmt.Println("Running ffmpeg command:", cmdStr)
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	err = cmd.Run()
 	if err != nil {
-		panic(fmt.Sprintf("Error running ffmpeg: %s", err))
+		panic(fmt.Sprintf("Error running ffmpeg cmd: %s: %s", cmdStr, err))
 	}
+	done <- true
+	c.progress.Clear()
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
 	if err != nil {
 		panic(fmt.Sprintf("Error removing tmp/out dir: %s", err))
 	}
-	fmt.Println("Video encoded")
+	fmt.Println("\nVideo encoded")
 
 	return nil
 }

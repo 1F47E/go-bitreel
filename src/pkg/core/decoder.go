@@ -14,34 +14,6 @@ import (
 	"time"
 )
 
-// decoding video to frames progress runner
-func (c *Core) framerReporter(dir string, totalFrames int, done <-chan bool) {
-	ticker := time.NewTicker(time.Second / 10)
-	defer ticker.Stop()
-	prevCount := 0
-	c.ResetProgress(totalFrames, "Extracting frames... ")
-	for {
-		select {
-		case <-ticker.C:
-			// scan dir
-			files, err := os.ReadDir(dir)
-			if err != nil {
-				log.Println("scanning dir error:", err)
-				break
-			}
-			// count files
-			l := len(files)
-			if l > prevCount {
-				prevCount = l
-				c.progress.Set(l)
-			}
-		case <-done:
-			return
-		}
-
-	}
-}
-
 func (c *Core) Decode(videoFile string) error {
 	var err error
 
@@ -61,18 +33,9 @@ func (c *Core) Decode(videoFile string) error {
 	// but the total size of all frames is about 3% less then a video (in a corrent compression case)
 	// so we can use the video file size to estimate the total frames count
 
-	// get video file size
-	fileInfo, err := os.Stat(videoFile)
-	if err != nil {
-		log.Fatal("Error opening file:", err)
-	}
-	videoFileSize := fileInfo.Size()
-	totalFramesCount := videoFileSize/frameFileSize - 1 // 3% error
-	fmt.Println("Total frames count estimated:", totalFramesCount)
-
 	// start reporter
 	done := make(chan bool)
-	go c.framerReporter(framesDir, int(totalFramesCount), done)
+	go c.framerReporter(framesDir, videoFile, done)
 
 	framesPath := framesDir + "/out_%08d.png"
 	// Call ffmpeg to decode the video into frames
@@ -237,6 +200,43 @@ func (c *Core) Decode(videoFile string) error {
 	// 	fmt.Println("!!! Cannot remove frames dir:", err)
 	// }
 	return nil
+}
+
+// decoding video to frames progress runner
+func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
+	// get video file size
+	fileInfo, err := os.Stat(videoFile)
+	if err != nil {
+		log.Fatal("Error opening file:", err)
+	}
+	videoFileSize := fileInfo.Size()
+	totalFramesCount := int(videoFileSize/frameFileSize - 1) // 3% error
+	fmt.Println("Total frames count estimated:", totalFramesCount)
+
+	ticker := time.NewTicker(time.Second / 10)
+	defer ticker.Stop()
+	prevCount := 0
+	c.ResetProgress(totalFramesCount, "Extracting frames... ")
+	for {
+		select {
+		case <-ticker.C:
+			// scan dir
+			files, err := os.ReadDir(dir)
+			if err != nil {
+				log.Println("scanning dir error:", err)
+				break
+			}
+			// count files
+			l := len(files)
+			if l > prevCount {
+				prevCount = l
+				c.progress.Set(l)
+			}
+		case <-done:
+			return
+		}
+
+	}
 }
 
 // TODO: make this a worker
