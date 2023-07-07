@@ -12,12 +12,25 @@ Then you can upload them to YouTube or Twitter and have infinate tape storage li
 
 TODO:
 - [x] encode file to frames
-- [ ] decode file to frames
-- [ ] generate video
-- [ ] decode video
+- [x] decode file to frames
+- [ ] rum ffmpeg from the code
+- [x] generate video
+- [x] decode video
+- [ ] add config to change pixel size for robustness
+- [ ] save original filename
+- [ ] add metadata to every frame at the top
+- [ ] add checksum to frames at the end
+- [ ] detect and of the file
 - [ ] add encryption
 - [ ] add bit rot protection
 - [ ] embed ffmpeg
 - [ ] add masking of the final video with custom image ? 
 
 
+
+DEV NOTES
+encode images to video with image convert to yuv422p10
+ffmpeg -framerate 30 -i out_%d.png -c:v prores -profile:v 3 -pix_fmt yuv422p10 output.mov
+
+decode video to images
+ffmpeg -i tmp/out/output.mov tmp/out/decompressed/output_%08d.png

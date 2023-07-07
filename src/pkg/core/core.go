@@ -52,6 +52,7 @@ func (c *Core) ResetProgress(max int, desc string) {
 }
 
 func (c *Core) Encode(filename string) error {
+	c.ResetProgress(-1, "Encoding...") // set as spinner
 
 	// open a file and read to bytes
 	file, err := os.Open(filename)
@@ -72,23 +73,22 @@ func (c *Core) Encode(filename string) error {
 	b := buf.Bytes()
 
 	// print the size
-	fmt.Print("File size: ")
-	if len(b) > 1024 {
-		fmt.Printf("%d %s\n", len(b)/1024, "KB")
-	} else if len(b) > 1024*1024 {
-		fmt.Printf("%d %s\n", len(b)/1024/1024, "MB")
-	} else if len(b) > 1024*1024*1024 {
-		fmt.Printf("%d %s\n", len(b)/1024/1024/1024, "GB")
-	} else {
-		fmt.Printf("%d %s\n", len(b), "Bytes")
-	}
+	// fmt.Print("File size: ")
+	// if len(b) > 1024 {
+	// 	fmt.Printf("%d %s\n", len(b)/1024, "KB")
+	// } else if len(b) > 1024*1024 {
+	// 	fmt.Printf("%d %s\n", len(b)/1024/1024, "MB")
+	// } else if len(b) > 1024*1024*1024 {
+	// 	fmt.Printf("%d %s\n", len(b)/1024/1024/1024, "GB")
+	// } else {
+	// 	fmt.Printf("%d %s\n", len(b), "Bytes")
+	// }
 
 	// calc amount of frames and frame size
-	totalFramesCnt := uint64(math.Ceil(float64(len(b)) / float64(frameSizeBits/8)))
+	totalFramesCnt := int(math.Ceil(float64(len(b)) / float64(frameSizeBits/8)))
 	fmt.Println("Frames:", totalFramesCnt)
 	totalFrameBytes := int(totalFramesCnt) * frameSizeBits / 8
-
-	c.ResetProgress(int(totalFramesCnt), "Encoding...")
+	c.ResetProgress(totalFramesCnt, "Encoding...") // set as spinner
 
 	bitIndex := 0
 	var bitsBuffer [frameSizeBits]bool
@@ -125,6 +125,66 @@ func (c *Core) Encode(filename string) error {
 				}(bitsBuffer, fileName)
 			}
 		}
+	}
+	return nil
+}
+
+func (c *Core) Decode(dir string) error {
+	c.ResetProgress(-1, "Decoding...") // spinner
+	// scan the directory for files
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	// get list of files
+	filesList := make([]string, 0, len(files))
+	for _, file := range files {
+		// get file path
+		path := dir + "/" + file.Name()
+		fmt.Println(path)
+		// check if the name has "output_" prefix
+		if strings.HasPrefix(file.Name(), "output_") {
+			// add to the list
+			filesList = append(filesList, path)
+		}
+	}
+	fmt.Println("total files:", len(filesList))
+	sort.Strings(filesList)
+
+	// filename with timestamp
+	// outputFilename := "tmp/decoded.bin.txt"
+	outputFilename := fmt.Sprintf("tmp/decoded_%d.txt", time.Now().Unix())
+
+	// setup progress bar
+	c.ResetProgress(len(filesList), "Decoding...")
+
+	// create a output file
+	// TODO: get output filename from metadata
+	f, err := os.Create(outputFilename)
+	if err != nil {
+		log.Fatalf("Cannot create file: %s - %v", outputFilename, err)
+	}
+	defer f.Close()
+	var bytesWritten, pixelErrorsCount int
+	for _, file := range filesList {
+		// fmt.Println("Decoding", file)
+		bytes, cnt := decodeFrame(file)
+		pixelErrorsCount += cnt
+
+		written, err := f.Write(bytes)
+		if err != nil {
+			log.Fatal("Cannot write to file:", err)
+		}
+		bytesWritten += written
+		err = c.progress.Add(1)
+		if err != nil {
+			log.Fatal("Cannot update progress bar:", err)
+		}
+
+	}
+	log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, outputFilename)
+	if pixelErrorsCount > 0 {
+		log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
 	}
 	return nil
 }
@@ -168,67 +228,6 @@ func encodeFrame(bits [frameSizeBits]bool) *image.NRGBA {
 
 	// fmt.Println("Encoding frame done")
 	return img
-}
-
-func (c *Core) Decode(dir string) error {
-	// scan the directory for files
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	// get list of files
-	filesList := make([]string, 0, len(files))
-	for _, file := range files {
-		// get file path
-		path := dir + "/" + file.Name()
-		fmt.Println(path)
-		// check if the name has "output_" prefix
-		if strings.HasPrefix(file.Name(), "output_") {
-			// add to the list
-			filesList = append(filesList, path)
-		}
-	}
-	fmt.Println("total files:", len(filesList))
-	sort.Strings(filesList)
-
-	// filename with timestamp
-	// outputFilename := "tmp/decoded.bin.txt"
-	outputFilename := fmt.Sprintf("tmp/decoded_%d.txt", time.Now().Unix())
-
-	// setup progress bar
-	// c.progress.Describe("Decoding...")
-	// c.progress.ChangeMax(len(filesList))
-	c.ResetProgress(len(filesList), "Decoding...")
-
-	// create a output file
-	// TODO: get output filename from metadata
-	f, err := os.Create(outputFilename)
-	if err != nil {
-		log.Fatalf("Cannot create file: %s - %v", outputFilename, err)
-	}
-	defer f.Close()
-	var bytesWritten, pixelErrorsCount int
-	for _, file := range filesList {
-		// fmt.Println("Decoding", file)
-		bytes, cnt := decodeFrame(file)
-		pixelErrorsCount += cnt
-
-		written, err := f.Write(bytes)
-		if err != nil {
-			log.Fatal("Cannot write to file:", err)
-		}
-		bytesWritten += written
-		err = c.progress.Add(1)
-		if err != nil {
-			log.Fatal("Cannot update progress bar:", err)
-		}
-
-	}
-	log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, outputFilename)
-	if pixelErrorsCount > 0 {
-		log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
-	}
-	return nil
 }
 
 func decodeFrame(filename string) ([]byte, int) {
