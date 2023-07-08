@@ -2,6 +2,7 @@
 package fs
 
 import (
+	cfg "bytereel/pkg/config"
 	"fmt"
 	"image"
 	"image/png"
@@ -12,7 +13,7 @@ import (
 	"strings"
 )
 
-var framesDir = "tmp/frames"
+var framesDir = cfg.PathFramesDir
 
 func CreateFramesDir() (string, error) {
 	err := os.MkdirAll(framesDir, os.ModePerm)

@@ -19,7 +19,7 @@ func ProgressSpinner(desc string) {
 
 func ProgressReset(max int, desc string) {
 	progress = progressCreate(max, desc)
-	_ = progress.RenderBlank()
+	// _ = progress.RenderBlank()
 }
 
 func progressCreate(max int, desc string) *progressbar.ProgressBar {

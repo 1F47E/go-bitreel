@@ -6,11 +6,9 @@ import (
 	"bytereel/pkg/fs"
 	"bytereel/pkg/job"
 	"bytereel/pkg/meta"
-	"fmt"
+	"bytereel/pkg/video"
 	"os"
-	"os/exec"
 	"runtime"
-	"strings"
 	"time"
 )
 
@@ -31,21 +29,17 @@ func Decode(videoFile string) (string, error) {
 
 	// start frames progress reporter
 	ProgressReset(0, "Extracting frames... ")
-	// progress.RenderBlank()
 	done := make(chan bool)
+	// fill scan frames folder untill video finishes extracting
+	// updates progress bar in a loop
 	go scanFramesDir(framesDir, videoFile, done)
 
-	framesPath := framesDir + "/out_%08d.png"
-	// Call ffmpeg to decode the video into frames
-	cmdStr := fmt.Sprintf("ffmpeg -y -i %s %s", videoFile, framesPath)
-	cmdList := strings.Split(cmdStr, " ")
-	log.Debug("Running ffmpeg command:", cmdStr)
-	cmd := exec.Command(cmdList[0], cmdList[1:]...)
-	err = cmd.Run()
+	err = video.ExtractFrames(videoFile, framesDir)
 	if err != nil {
-		panic(fmt.Sprintf("Error running ffmpeg: %s", err))
+		log.Fatalf("Extracting frames error: \n\n%s", err)
 	}
 
+	// stop the progress reporter
 	_ = progress.Finish()
 	close(done)
 

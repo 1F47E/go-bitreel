@@ -5,12 +5,11 @@ import (
 	"bytereel/pkg/encoder"
 	"bytereel/pkg/job"
 	"bytereel/pkg/meta"
+	"bytereel/pkg/video"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
@@ -112,17 +111,11 @@ func Encode(path string) error {
 	}(done)
 
 	// Call ffmpeg to decode the video into frames
-	videoPath := "tmp/out.mov"
-	cmdStr := "ffmpeg -y -framerate 30 -i tmp/out/out_%08d.png -c:v prores -profile:v 3 -pix_fmt yuv422p10 " + videoPath
-	cmdList := strings.Split(cmdStr, " ")
-	// fmt.Debug("Running ffmpeg command:", cmdStr)
-	cmd := exec.Command(cmdList[0], cmdList[1:]...)
-	err = cmd.Run()
+	err = video.EncodeFrames()
 	if err != nil {
-		panic(fmt.Sprintf("Error running ffmpeg cmd: %s: %s", cmdStr, err))
+		log.Fatal("Error encoding frames into video:", err)
 	}
 	done <- true
-	// _ = c.progress.Clear()
 	_ = progress.Clear()
 
 	// clean up tmp/out dir
