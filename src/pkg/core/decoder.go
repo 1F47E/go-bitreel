@@ -82,8 +82,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	defer os.Remove(tmpFile.Name()) // clean up
 
 	var bytesWritten, pixelErrorsCount int
-	var metaTime int64
-	var metaDatetime string
+	var metaTimestamp int64
 	var metaFilename string
 	var metaChecksum uint64
 	for _, file := range filesList {
@@ -99,12 +98,12 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		pixelErrorsCount += pErrCnt
 
 		// cut metadata
-		metadataSizeBytes := metadataSizeBits / 8
+		// metadataSizeBytes := metadataSizeBits / 8
 		// substract metadata size from the fileBytesCnt
-		fileBytesCnt -= metadataSizeBytes
-		meta := frameBytes[:metadataSizeBytes]
+		fileBytesCnt -= sizeMetadata
+		meta := frameBytes[:sizeMetadata]
 		// cut out metadata head and extra tail
-		data := frameBytes[metadataSizeBytes : metadataSizeBytes+fileBytesCnt]
+		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
 
 		// write data to the file
 		written, err := tmpFile.Write(data)
@@ -122,10 +121,10 @@ func (c *Core) Decode(videoFile string) (string, error) {
 			metaChecksum = binary.BigEndian.Uint64(checksumBytes)
 		}
 
-		if metaTime == 0 {
+		if metaTimestamp == 0 {
 			timeBytes := meta[8:16]
-			metaTime = int64(binary.BigEndian.Uint64(timeBytes))
-			fmt.Println("METADATA time:", metaTime)
+			metaTimestamp = int64(binary.BigEndian.Uint64(timeBytes))
+			fmt.Println("METADATA timestamp:", metaTimestamp)
 		}
 		if metaFilename == "" {
 			metaFilenameBuff := meta[16:]
@@ -169,18 +168,18 @@ func (c *Core) Decode(videoFile string) (string, error) {
 
 	// check metadata
 	// report time from metadata
-	if metaTime != 0 {
-		metaunix := time.Unix(metaTime, 0)
+	if metaTimestamp != 0 {
+		metaunix := time.Unix(metaTimestamp, 0)
 		// format to datetime
 		fmt.Println("Time from metadata:", metaunix.Format("2006-01-02 15:04:05"))
-		metaDatetime = metaunix.Format("2006-01-02_15-04-05")
+		// metaDatetime = metaunix.Format("2006-01-02_15-04-05")
 	}
 	if metaFilename != "" {
 		fmt.Println("Filename found in metadata:", metaFilename)
 		// rename tmp file to the original filename
-		if metaDatetime != "" {
-			metaFilename = fmt.Sprintf("%s_%s", metaDatetime, metaFilename)
-		}
+		// if metaDatetime != "" {
+		// 	metaFilename = fmt.Sprintf("%s_%s", metaDatetime, metaFilename)
+		// }
 		// outputFilename := fmt.Sprintf("decoded_%s", metaFilename)
 		out = fmt.Sprintf("decoded_%s", metaFilename)
 
@@ -255,7 +254,8 @@ func decodeFrame(filename string) ([]byte, int, int) {
 		log.Fatal("Cannot decode file:", err)
 	}
 
-	var fileBits [frameSizeBits]bool
+	var fileBits [sizeFrame * 8]bool
+	// fileBits := make([]bool, sizeFrame*8)
 
 	// copy image to bytes
 	var writeIdx int
