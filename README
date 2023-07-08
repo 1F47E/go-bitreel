@@ -34,13 +34,9 @@ TODO
 - [x] run ffmpeg from the code
 - [x] generate video
 - [x] decode video
-- [ ] check checksum on decode
-- [ ] add workers, limit to cpu cores
+- [x] check checksum on decode
+- [x] add workers, limit to cpu cores
 - [ ] add encryption
-- [ ] embed ffmpeg
-- [ ] add masking of the final video with custom image ? 
-- [ ] add config to change pixel size for robustness
-
 
 
 DEV NOTES
