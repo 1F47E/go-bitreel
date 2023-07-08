@@ -4,7 +4,6 @@ import (
 	"bytereel/pkg/meta"
 	"fmt"
 	"image/png"
-	"log"
 	"os"
 	"os/exec"
 	"sort"
@@ -40,7 +39,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// Call ffmpeg to decode the video into frames
 	cmdStr := fmt.Sprintf("ffmpeg -y -i %s %s", videoFile, framesPath)
 	cmdList := strings.Split(cmdStr, " ")
-	// fmt.Println("Running ffmpeg command:", cmdStr)
+	log.Debugf("Running ffmpeg command:", cmdStr)
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	err = cmd.Run()
 	if err != nil {
@@ -68,7 +67,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	if len(filesList) == 0 {
 		log.Fatal("No files to decode")
 	}
-	fmt.Println("total frames:", len(filesList))
+	log.Debugf("total frames: %d", len(filesList))
 	sort.Strings(filesList)
 
 	// setup progress bar
@@ -87,7 +86,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// var metaChecksum uint64
 	var m meta.Metadata
 	for _, file := range filesList {
-		// fmt.Println("Decoding", file)
+		log.Debug("Decoding", file)
 
 		// NOTE:
 		// when decoder reached red area if will no longer write bits to the frameBytes
@@ -105,7 +104,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		header := frameBytes[:sizeMetadata]
 		m, err = meta.Parse(header)
 		if err != nil {
-			log.Printf("!!! metadata broken in file %s: %s\n", file, err)
+			log.Warnf("!!! metadata broken in file %s: %s\n", file, err)
 		}
 		// cut out metadata head and extra tail
 		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
@@ -113,7 +112,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		// do checksum check
 		isValid := m.Validate(data)
 		if !isValid {
-			log.Printf("!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+			log.Warnf("!!! frame checksum and metadata checksum mismatch in file %s\n", file)
 		}
 
 		// write data to the file
@@ -145,7 +144,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	}
 
 	if pixelErrorsCount > 0 {
-		log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
+		log.Warn("Pixel errors corrected: %d\n", pixelErrorsCount)
 	}
 
 	// check metadata
@@ -153,22 +152,22 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	if m.IsOk() {
 		out = m.Filename
 	} else {
-		fmt.Println("!!! No metadata found")
+		log.Warn("!!! No metadata found")
 		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
 	// do rename
 	err = os.Rename(tmpFile.Name(), out)
 	if err != nil {
-		log.Println("Cant rename a file to ", out)
+		log.Error("Cant rename a file to ", out)
 		return out, err
 	}
-	log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, out)
+	log.Infof("\n\nWrote %d bytes to %s\n", bytesWritten, out)
 
 	// cleanup frames dir
 	err = os.RemoveAll(framesDir)
 	if err != nil {
-		fmt.Println("!!! Cannot remove frames dir:", err)
+		log.Warn("!!! Cannot remove frames dir:", err)
 	}
 	return out, nil
 }
@@ -182,7 +181,7 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 	}
 	videoFileSize := fileInfo.Size()
 	totalFramesCount := int(videoFileSize/frameFileSize - 1) // 3% error
-	fmt.Println("Total frames count estimated:", totalFramesCount)
+	log.Debug("Total frames count estimated:", totalFramesCount)
 
 	ticker := time.NewTicker(time.Second / 10)
 	defer ticker.Stop()
@@ -194,7 +193,7 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 			// scan dir
 			files, err := os.ReadDir(dir)
 			if err != nil {
-				log.Println("scanning dir error:", err)
+				log.Warn("scanning dir error:", err)
 				break
 			}
 			// count files

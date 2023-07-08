@@ -1,13 +1,15 @@
 package meta
 
 import (
+	"bytereel/pkg/logger"
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
-	"log"
 	"strings"
 	"time"
 )
+
+var log = logger.Log
 
 const metadataMaxFilenameLen = 524
 const sizeMetadata = 256
@@ -27,9 +29,9 @@ func New(path string) Metadata {
 
 // METADATA parsing
 func Parse(header []byte) (Metadata, error) {
-	// fmt.Println("Parsing metadata")
-	// fmt.Println("Header len: ", len(header))
-	// fmt.Printf("Header: %v\n", header)
+	log.Debug("Parsing metadata")
+	log.Debug("Header len: ", len(header))
+	log.Debugf("Header: %v\n", header)
 
 	checksumBytes := header[:8]
 	timestampBytes := header[8:16]
@@ -65,7 +67,7 @@ func (m *Metadata) Print() string {
 func (m *Metadata) FormatDatetime() string {
 	t := time.Unix(m.timestamp, 0)
 	localTime := t.Local()
-	fmt.Println("Local time: ", localTime)
+	log.Debugf("Local time: ", localTime)
 	return localTime.Format(time.RFC822)
 }
 
@@ -89,12 +91,12 @@ func (m *Metadata) Hash(bytes []byte) []bool {
 	s := 0
 	l := len(checksumBytes)
 	copy(header[s:l], checksumBytes[:])
-	fmt.Printf("META:Checksum bytes: %v\n", checksumBytes)
+	log.Debugf("META:Checksum bytes: %v\n", checksumBytes)
 
 	// copy timestamp
 	tsBytes := convertUint64ToBytes(uint64(m.timestamp))
 	binary.BigEndian.PutUint64(tsBytes, uint64(m.timestamp))
-	fmt.Printf("META:Timestamp bytes: %v\n", tsBytes)
+	log.Debugf("META:Timestamp bytes: %v\n", tsBytes)
 	s = l
 	l = s + 8
 	copy(header[s:l], tsBytes[:])
@@ -102,7 +104,7 @@ func (m *Metadata) Hash(bytes []byte) []bool {
 	// copy filename
 	fnBytes := make([]byte, len(m.Filename))
 	copy(fnBytes, []byte(m.Filename))
-	fmt.Printf("META:Filename bytes: %v\n", fnBytes)
+	log.Debugf("META:Filename bytes: %v\n", fnBytes)
 	s = l
 	l = s + len(m.Filename)
 	copy(header[s:l], fnBytes[:])
@@ -114,8 +116,7 @@ func generateChecksum(bytes *[]byte) uint64 {
 	hasher := fnv.New64a()
 	_, err := hasher.Write(*bytes)
 	if err != nil {
-		log.Println("META:Error writing to hasher:", err)
-		panic("META:Error writing to hasher")
+		log.Fatal("META:Error writing to hasher")
 	}
 	return hasher.Sum64()
 }

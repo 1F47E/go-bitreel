@@ -8,7 +8,6 @@ import (
 	"image/color"
 	"image/png"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,8 +18,8 @@ import (
 )
 
 func workerEncode(g int, jobs <-chan job.Job) {
-	fmt.Printf("Goroutine %d started\n", g)
-	defer log.Printf("Goroutine %d finished\n", g)
+	log.Debugf("Goroutine %d started\n", g)
+	defer log.Debugf("Goroutine %d finished\n", g)
 
 	var err error
 	for {
@@ -30,7 +29,7 @@ func workerEncode(g int, jobs <-chan job.Job) {
 		}
 		// TODO: detect by the size of the slice in a job is it last chunk or not
 
-		fmt.Printf("G #%d got job %s\n", g, j.Print())
+		log.Debugf("G #%d got job %s\n", g, j.Print())
 
 		bufferBits := make([]bool, sizeFrame*8)
 
@@ -61,17 +60,17 @@ func workerEncode(g int, jobs <-chan job.Job) {
 			}
 		}
 
-		fmt.Printf("G #%d Proccessing frame %d\n", g, j.FrameNum)
+		log.Debugf("G #%d Proccessing frame %d\n", g, j.FrameNum)
 		now := time.Now()
 
 		// Encoding bits to image - around 1.5s
-		fmt.Printf("G #%d Frame start: %d\n", g, j.FrameNum)
+		log.Debugf("G #%d Frame start: %d\n", g, j.FrameNum)
 		img := encodeFrame(bufferBits, bitIndex)
-		fmt.Printf("G #%d Frame done. Took time: %s\n", g, time.Since(now))
+		log.Debugf("G #%d Frame done. Took time: %s\n", g, time.Since(now))
 
 		// Saving image to file - around 7s
 		now = time.Now()
-		fmt.Printf("G #%d Save start: %d\n", g, j.FrameNum)
+		log.Debugf("G #%d Save start: %d\n", g, j.FrameNum)
 		fileName := fmt.Sprintf("tmp/out/out_%08d.png", j.FrameNum)
 		err = save(fileName, img)
 		if err != nil {
@@ -79,7 +78,7 @@ func workerEncode(g int, jobs <-chan job.Job) {
 			// NOTE: no need to continue if we can't save the file
 			panic(fmt.Sprintf("EXITING!\n\n\nError saving file: %s", err))
 		}
-		fmt.Printf("G #%d Save done. Took time: %s\n", g, time.Since(now))
+		log.Debugf("G #%d Save done. Took time: %s\n", g, time.Since(now))
 	}
 }
 
@@ -132,7 +131,7 @@ func (c *Core) Encode(path string) error {
 		n, err := file.Read(readBuffer)
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println("EOF")
+				log.Debug("EOF")
 				break
 			}
 			log.Println("Error reading file:", err)
@@ -140,9 +139,9 @@ func (c *Core) Encode(path string) error {
 		}
 		// copy the buffer explicitly
 		j.Update(readBuffer, n, frameCnt)
-		fmt.Printf("Sending job for frame %d: %s\n", frameCnt, j.Print())
+		log.Debugf("Sending job for frame %d: %s\n", frameCnt, j.Print())
 		// this will block untill available worker pick it up
-		fmt.Println(j.Print())
+		log.Debug(j.Print())
 		jobs <- j
 		_ = c.progress.Add(1)
 		frameCnt++
@@ -154,7 +153,7 @@ func (c *Core) Encode(path string) error {
 
 	// wait for all the files to be processed
 	wg.Wait()
-	fmt.Println("All workers done")
+	log.Debug("All workers done")
 
 	// ====== VIDEO ENCODING
 
@@ -177,7 +176,7 @@ func (c *Core) Encode(path string) error {
 	videoPath := "tmp/out.mov"
 	cmdStr := "ffmpeg -y -framerate 30 -i tmp/out/out_%08d.png -c:v prores -profile:v 3 -pix_fmt yuv422p10 " + videoPath
 	cmdList := strings.Split(cmdStr, " ")
-	// fmt.Println("Running ffmpeg command:", cmdStr)
+	// fmt.Debug("Running ffmpeg command:", cmdStr)
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	err = cmd.Run()
 	if err != nil {
@@ -191,7 +190,7 @@ func (c *Core) Encode(path string) error {
 	if err != nil {
 		panic(fmt.Sprintf("Error removing tmp/out dir: %s", err))
 	}
-	fmt.Println("\nVideo encoded")
+	log.Debug("\nVideo encoded")
 
 	return nil
 }
@@ -204,7 +203,7 @@ func printBits(bits []bool) {
 			fmt.Print("0")
 		}
 	}
-	fmt.Println()
+	log.Debug()
 }
 
 func bytesToBits(bytes []byte) []bool {
@@ -218,13 +217,13 @@ func bytesToBits(bytes []byte) []bool {
 }
 
 func encodeFrame(bits []bool, bitIndex int) *image.NRGBA {
-	// fmt.Println("Encoding frame")
+	// fmt.Debug("Encoding frame")
 
 	// create empty image
 	img := image.NewNRGBA(image.Rect(0, 0, frameWidth, frameHeight))
 
 	// generate image
-	// fmt.Println("filling the image")
+	// fmt.Debug("filling the image")
 	writeIdx := 0
 	var col color.Color
 	for x := 0; x < img.Bounds().Dx(); x += 2 {
@@ -248,7 +247,7 @@ func encodeFrame(bits []bool, bitIndex int) *image.NRGBA {
 		}
 	}
 
-	// fmt.Println("Encoding frame done")
+	// fmt.Debug("Encoding frame done")
 	return img
 }
 
