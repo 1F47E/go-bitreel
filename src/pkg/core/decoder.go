@@ -6,14 +6,28 @@ import (
 	"image/png"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
 )
 
+type frame struct {
+	file string
+	idx  int
+}
+
+type frameRes struct {
+	data []byte
+	meta meta.Metadata
+}
+
 func (c *Core) Decode(videoFile string) (string, error) {
 	var err error
 	var out string
+	var bytesWritten int
+	// var pixelErrorsCount int
+	var metadata meta.Metadata
 
 	c.ResetProgress(-1, "Decoding video...") // spinner
 
@@ -80,55 +94,60 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	}
 	defer os.Remove(tmpFile.Name()) // clean up
 
-	var bytesWritten, pixelErrorsCount int
-	// var metaTimestamp int64
-	// var metaFilename string
-	// var metaChecksum uint64
-	var m meta.Metadata
-	for _, file := range filesList {
-		log.Debug("Decoding", file)
+	// star the workers
+	numCpu := runtime.NumCPU()
 
-		// NOTE:
-		// when decoder reached red area if will no longer write bits to the frameBytes
-		// so we need fileBytesCnt to know how many bytes to write to the file
-		// to slice the data from the frameBytes
-		// fileBytesCnt will include metadata size!
+	framesCh := make(chan frame, numCpu) // buff by G count
+	resChs := make([]chan frameRes, len(filesList))
 
-		frameBytes, pErrCnt, fileBytesCnt := decodeFrame(file)
-		pixelErrorsCount += pErrCnt
+	// create res channels
+	for i := 0; i < len(filesList); i++ {
+		resChs[i] = make(chan frameRes, 1)
+	}
 
-		// cut metadata
-		// metadataSizeBytes := metadataSizeBits / 8
-		// substract metadata size from the fileBytesCnt
-		fileBytesCnt -= sizeMetadata
-		header := frameBytes[:sizeMetadata]
-		m, err = meta.Parse(header)
-		if err != nil {
-			log.Warnf("!!! metadata broken in file %s: %s\n", file, err)
+	log.Debugf("Starting %d workers", numCpu)
+	for i := 0; i <= numCpu; i++ {
+		i := i
+		go workerDecode(i+1, framesCh, resChs)
+	}
+
+	// send all the jobs, in batches of G cnt
+	go func() {
+		for i, file := range filesList {
+			framesCh <- frame{file: file, idx: i}
+			log.Debugf("Sent file %d/%d", i+1, len(filesList))
 		}
-		// cut out metadata head and extra tail
-		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
+	}()
 
-		// do checksum check
-		isValid := m.Validate(data)
-		if !isValid {
-			log.Warnf("!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+	// read results, blocking, in order
+	log.Debug("Reading res channels")
+	for i, ch := range resChs {
+		log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
+		fr := <-ch
+
+		// set metadata if not set already
+		if fr.meta.IsOk() && !metadata.IsOk() {
+			metadata = fr.meta
+			log.Warnf("Metadata found: %s", metadata.Print())
 		}
 
-		// write data to the file
-		written, err := tmpFile.Write(data)
+		log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.data))
+		written, err := tmpFile.Write(fr.data)
 		if err != nil {
 			log.Fatal("Cannot write to file:", err)
 		}
 		bytesWritten += written
-
-		// TODO: do checksum of the bytes
-
-		err = c.progress.Add(1)
-		if err != nil {
-			log.Fatal("Cannot update progress bar:", err)
+		if os.Getenv("DEBUG") != "" {
+			_ = c.progress.Add(1)
 		}
 	}
+	log.Debug("Closing res channels")
+	for _, ch := range resChs {
+		close(ch)
+	}
+	log.Debug("Closing frames channel")
+	close(framesCh)
+	log.Debugf("bytes written: %d", bytesWritten)
 
 	// close the file so we can rename it
 	// Ensure data is written to disk
@@ -143,16 +162,16 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		log.Fatal("Cannot close file:", err)
 	}
 
-	if pixelErrorsCount > 0 {
-		log.Warn("Pixel errors corrected: %d\n", pixelErrorsCount)
-	}
+	// if pixelErrorsCount > 0 {
+	// 	log.Warn("Pixel errors corrected: %d\n", pixelErrorsCount)
+	// }
 
 	// check metadata
 	// report time from metadata
-	if m.IsOk() {
-		out = m.Filename
+	if metadata.IsOk() {
+		out = metadata.Filename
 	} else {
-		log.Warn("!!! No metadata found")
+		log.Warn("\n!!! No metadata found")
 		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
@@ -170,6 +189,53 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		log.Warn("!!! Cannot remove frames dir:", err)
 	}
 	return out, nil
+}
+
+func workerDecode(id int, fCh <-chan frame, resChs []chan frameRes) {
+	log.Debugf("G %d started\n", id)
+	defer log.Debugf("G %d finished\n", id)
+	for {
+		frame, ok := <-fCh
+		if !ok {
+			return
+		}
+		file := frame.file
+		log.Debugf("G %d got %d-%s\n", id, frame.idx, file)
+
+		frameBytes, pixErrCnt, fileBytesCnt := decodeFrame(file)
+		if pixErrCnt > 0 {
+			log.Warnf("!!! %d pixel errors corrected in file %s\n", pixErrCnt, file)
+		}
+		log.Debugf("G %d decoded %s\n", id, file)
+		// pixelErrorsCount += pErrCnt
+
+		// cut metadata
+		// metadataSizeBytes := metadataSizeBits / 8
+		// substract metadata size from the fileBytesCnt
+		fileBytesCnt -= sizeMetadata
+		header := frameBytes[:sizeMetadata]
+		m, err := meta.Parse(header)
+		if err != nil {
+			log.Warnf("\n!!! metadata broken in file %s: %s\n", file, err)
+		}
+		log.Debugf("G %d parsed metadata in %s\n", id, file)
+		// cut out metadata head and extra tail
+		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
+
+		// do checksum check
+		isValid := m.Validate(data)
+		if !isValid {
+			log.Warnf("\n!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+		}
+		log.Debugf("G %d validated %s\n", id, file)
+		resChs[frame.idx] <- frameRes{
+			data: data,
+			meta: m,
+		}
+
+		log.Debugf("G %d sent res %s\n", id, file)
+
+	}
 }
 
 // decoding video to frames progress runner
@@ -209,7 +275,10 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 	}
 }
 
-// TODO: make this a worker
+// NOTE:
+// when decoder reached red area if will no longer write bits to the frameBytes
+// so we need fileBytesCnt to know how many bytes to write to the file
+// fileBytesCnt will include metadata size!
 func decodeFrame(filename string) ([]byte, int, int) {
 
 	// read the image
