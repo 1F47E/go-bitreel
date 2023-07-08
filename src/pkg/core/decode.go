@@ -2,6 +2,7 @@ package core
 
 import (
 	cfg "bytereel/pkg/config"
+	p "bytereel/pkg/core/progress"
 	"bytereel/pkg/encoder"
 	"bytereel/pkg/fs"
 	"bytereel/pkg/job"
@@ -19,7 +20,7 @@ func Decode(videoFile string) (string, error) {
 	var metadata meta.Metadata
 
 	// ===== VIDEO DECODING
-	ProgressSpinner("Decoding video... ")
+	p.ProgressSpinner("Decoding video... ")
 
 	// create dir to store frames
 	framesDir, err := fs.CreateFramesDir()
@@ -28,7 +29,7 @@ func Decode(videoFile string) (string, error) {
 	}
 
 	// start frames progress reporter
-	ProgressReset(0, "Extracting frames... ")
+	p.ProgressReset(0, "Extracting frames... ")
 	done := make(chan bool)
 	// fill scan frames folder untill video finishes extracting
 	// updates progress bar in a loop
@@ -40,7 +41,8 @@ func Decode(videoFile string) (string, error) {
 	}
 
 	// stop the progress reporter
-	_ = progress.Finish()
+	p.Finish()
+
 	close(done)
 
 	// ===== DECODING FRAMES
@@ -50,7 +52,7 @@ func Decode(videoFile string) (string, error) {
 	}
 	log.Debugf("total frames: %d", len(filesList))
 
-	ProgressReset(len(filesList), "Decoding frames... ")
+	p.ProgressReset(len(filesList), "Decoding frames... ")
 
 	// start the workers
 	numCpu := runtime.NumCPU()
@@ -101,7 +103,7 @@ func Decode(videoFile string) (string, error) {
 			log.Fatal("Cannot write to file:", err)
 		}
 		bytesWritten += written
-		_ = progress.Add(1)
+		p.Add(1)
 	}
 	log.Debug("Closing res channels")
 	for _, ch := range resChs {
@@ -122,6 +124,7 @@ func Decode(videoFile string) (string, error) {
 	if err != nil {
 		log.Fatal("Cannot save decoded file:", err)
 	}
+	log.Infof("Decoded file saved: %s", out)
 	return out, nil
 }
 
@@ -142,7 +145,7 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 	ticker := time.NewTicker(time.Second / 10)
 	defer ticker.Stop()
 	// update progress with estimated num of frames
-	progress.ChangeMax(totalFramesCount)
+	p.Max(totalFramesCount)
 
 	prevCount := 0
 	for {
@@ -158,7 +161,7 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 			l := len(files)
 			if l > prevCount {
 				prevCount = l
-				_ = progress.Set(l)
+				p.Set(l)
 			}
 			log.Debugf("Scanned %d/%d frames", l, totalFramesCount)
 		case <-done:

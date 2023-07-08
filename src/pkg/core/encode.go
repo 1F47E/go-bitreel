@@ -2,6 +2,7 @@ package core
 
 import (
 	cfg "bytereel/pkg/config"
+	p "bytereel/pkg/core/progress"
 	"bytereel/pkg/encoder"
 	"bytereel/pkg/job"
 	"bytereel/pkg/meta"
@@ -36,10 +37,7 @@ func Encode(path string) error {
 	size := fileInfo.Size()
 	estimatedFrames := int(int(size) / len(readBuffer))
 	log.Debug("Estimated frames:", estimatedFrames)
-	// c.ResetProgress(estimatedFrames, "Encoding...") // set as spinner
-	// _ = c.progress.Add(1)
-	progress.Describe("Encoding...")
-	_ = progress.Add(1)
+	p.ProgressReset(estimatedFrames, "Encoding... ")
 
 	// ===== START WORKERS
 
@@ -78,8 +76,7 @@ func Encode(path string) error {
 		// this will block untill available worker pick it up
 		log.Debug(j.Print())
 		jobs <- j
-		// _ = c.progress.Add(1)
-		_ = progress.Add(1)
+		p.Add(1)
 		frameCnt++
 	}
 
@@ -94,16 +91,14 @@ func Encode(path string) error {
 	// ====== VIDEO ENCODING
 
 	// setup progress bar async, otherwise it wont animate
-	// c.ResetProgress(-1, "Saving video...")
-	progress.Describe("Saving video...")
+	p.ProgressSpinner("Saving video... ")
 	done := make(chan bool)
 	go func(done <-chan bool) {
 		ticker := time.NewTicker(time.Millisecond * 300)
 		for {
 			select {
 			case <-ticker.C:
-				// _ = c.progress.Add(1)
-				_ = progress.Add(1)
+				p.Add(1) // spin
 			case <-done:
 				return
 			}
@@ -116,7 +111,6 @@ func Encode(path string) error {
 		log.Fatal("Error encoding frames into video:", err)
 	}
 	done <- true
-	_ = progress.Clear()
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
