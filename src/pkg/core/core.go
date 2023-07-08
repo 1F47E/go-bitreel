@@ -9,16 +9,31 @@ import (
 
 var log = logger.Log
 
-var progress = progressbar.NewOptions(-1,
-	progressbar.OptionSetDescription(""),
-	progressbar.OptionEnableColorCodes(true),
-	progressbar.OptionSetTheme(progressbar.Theme{
-		Saucer:        "[green]=[reset]",
-		SaucerHead:    "[green]>[reset]",
-		SaucerPadding: " ",
-		BarStart:      "[",
-		BarEnd:        "]",
-	}))
+// TODO: extract to sep pkg
+var progress = progressCreate(-1, "") // init as spinner
+
+func ProgressSpinner(desc string) {
+	ProgressReset(-1, desc)
+	_ = progress.RenderBlank()
+}
+
+func ProgressReset(max int, desc string) {
+	progress = progressCreate(max, desc)
+	_ = progress.RenderBlank()
+}
+
+func progressCreate(max int, desc string) *progressbar.ProgressBar {
+	return progressbar.NewOptions(max,
+		progressbar.OptionSetDescription(desc),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]/[reset]",
+			SaucerHead:    "[green]/[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
+}
 
 // Compare files before and after decoding for test command
 func Compare(file1, file2 string) (bool, error) {

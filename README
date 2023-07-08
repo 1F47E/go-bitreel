@@ -37,6 +37,7 @@ TODO
 - [x] check checksum on decode
 - [x] add workers, limit to cpu cores
 - [ ] add encryption
+- [ ] error correction (ECC) like reed-solomon
 
 
 DEV NOTES

@@ -5,18 +5,19 @@ import (
 	"fmt"
 )
 
-// job for the worker
+// job for the decoding worker
 type JobDec struct {
 	File string
 	Idx  int
 }
 
-// res from the worker
+// res from the decoding worker
 type JobDecRes struct {
 	Data []byte
 	Meta meta.Metadata
 }
 
+// job for the encoding worker
 type JobEnc struct {
 	Buffer   []byte
 	Metadata meta.Metadata

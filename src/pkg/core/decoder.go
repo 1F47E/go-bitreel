@@ -20,10 +20,8 @@ func Decode(videoFile string) (string, error) {
 	var bytesWritten int
 	var metadata meta.Metadata
 
-	// .ResetProgress(-1, "Decoding video...") // spinner
-	progress.Describe("Decoding video...")
-
 	// ===== VIDEO DECODING
+	ProgressSpinner("Decoding video... ")
 
 	// create dir to store frames
 	framesDir, err := fs.CreateFramesDir()
@@ -31,13 +29,11 @@ func Decode(videoFile string) (string, error) {
 		log.Fatal("Error creating frames dir:", err)
 	}
 
-	// NOTE: total frames count is unknown at this point
-	// but the total size of all frames is about 3% less then a video (in a corrent compression case)
-	// so we can use the video file size to estimate the total frames count
-
-	// start reporter
+	// start frames progress reporter
+	ProgressReset(0, "Extracting frames... ")
+	// progress.RenderBlank()
 	done := make(chan bool)
-	go framerReporter(framesDir, videoFile, done)
+	go scanFramesDir(framesDir, videoFile, done)
 
 	framesPath := framesDir + "/out_%08d.png"
 	// Call ffmpeg to decode the video into frames
@@ -50,22 +46,20 @@ func Decode(videoFile string) (string, error) {
 		panic(fmt.Sprintf("Error running ffmpeg: %s", err))
 	}
 
+	_ = progress.Finish()
 	close(done)
 
 	// ===== DECODING FRAMES
-
-	// scan the directory for files
 	filesList, err := fs.ScanFrames()
 	if err != nil {
 		log.Fatal("Error scanning frames dir:", err)
 	}
 	log.Debugf("total frames: %d", len(filesList))
 
-	progress.Describe("Decoding frames...")
+	ProgressReset(len(filesList), "Decoding frames... ")
 
-	// star the workers
+	// start the workers
 	numCpu := runtime.NumCPU()
-
 	framesCh := make(chan job.JobDec, numCpu) // buff by G count
 	resChs := make([]chan job.JobDecRes, len(filesList))
 
@@ -88,13 +82,13 @@ func Decode(videoFile string) (string, error) {
 		}
 	}()
 
-	// write results to file, blocking, in order
 	// Create a temporary file in the same directory
 	log.Debug("Reading res channels, writing to file")
 	tmpFile, err := fs.CreateTempFile()
 	if err != nil {
 		log.Fatal("Cannot create temp file:", err)
 	}
+	// write results to file, blocking, in order
 	for i, ch := range resChs {
 		log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
 		fr := <-ch
@@ -113,9 +107,7 @@ func Decode(videoFile string) (string, error) {
 			log.Fatal("Cannot write to file:", err)
 		}
 		bytesWritten += written
-		if os.Getenv("DEBUG") != "" {
-			_ = progress.Add(1)
-		}
+		_ = progress.Add(1)
 	}
 	log.Debug("Closing res channels")
 	for _, ch := range resChs {
@@ -139,8 +131,11 @@ func Decode(videoFile string) (string, error) {
 	return out, nil
 }
 
-// decoding video to frames progress runner
-func framerReporter(dir string, videoFile string, done <-chan bool) {
+// Decoding video to frames progress runner
+// NOTE: total frames count is unknown at this point
+// but the total size of all frames is about 3% less then a video (in a corrent compression case)
+// so we can use the video file size to estimate the total frames count
+func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 	// get video file size
 	fileInfo, err := os.Stat(videoFile)
 	if err != nil {
@@ -152,9 +147,10 @@ func framerReporter(dir string, videoFile string, done <-chan bool) {
 
 	ticker := time.NewTicker(time.Second / 10)
 	defer ticker.Stop()
+	// update progress with estimated num of frames
+	progress.ChangeMax(totalFramesCount)
+
 	prevCount := 0
-	// c.ResetProgress(totalFramesCount, "Extracting frames... ")
-	progress.Describe("Extracting frames... ")
 	for {
 		select {
 		case <-ticker.C:
@@ -168,12 +164,11 @@ func framerReporter(dir string, videoFile string, done <-chan bool) {
 			l := len(files)
 			if l > prevCount {
 				prevCount = l
-				// _ = c.progress.Set(l)
 				_ = progress.Set(l)
 			}
+			log.Debugf("Scanned %d/%d frames", l, totalFramesCount)
 		case <-done:
 			return
 		}
-
 	}
 }
