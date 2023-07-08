@@ -9,7 +9,6 @@ import (
 var log = logger.Log
 
 func main() {
-	c := core.NewCore()
 
 	// read cmd line args
 	args := os.Args[1:]
@@ -22,28 +21,28 @@ func main() {
 	command := args[0]
 	arg := args[1]
 	if command == "d" {
-		_, err := c.Decode(arg)
+		_, err := core.Decode(arg)
 		if err != nil {
 			log.Fatalf("Error decoding video: %v", err)
 		}
 	} else if command == "e" {
-		err := c.Encode(arg)
+		err := core.Encode(arg)
 		if err != nil {
 			log.Fatalf("Error encoding video: %v", err)
 		}
 	} else if command == "test" {
 		// encode + decode + compare
-		err := c.Encode(arg)
+		err := core.Encode(arg)
 		if err != nil {
 			log.Fatalf("Error encoding video: %v", err)
 		}
 		videoFile := "tmp/out.mov"
-		out, err := c.Decode(videoFile)
+		out, err := core.Decode(videoFile)
 		if err != nil {
 			log.Fatalf("Error decoding video: %v", err)
 		}
 		// compare files
-		same, err := c.Compare(arg, out)
+		same, err := core.Compare(arg, out)
 		if err != nil {
 			log.Fatalf("Error comparing files: %v", err)
 		}

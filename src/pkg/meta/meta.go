@@ -68,7 +68,7 @@ func (m *Metadata) Print() string {
 func (m *Metadata) FormatDatetime() string {
 	t := time.Unix(m.timestamp, 0)
 	localTime := t.Local()
-	log.Debugf("Local time: ", localTime)
+	log.Debug("Local time: ", localTime)
 	return localTime.Format(time.RFC822)
 }
 

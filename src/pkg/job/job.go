@@ -19,24 +19,19 @@ type JobDecRes struct {
 
 type JobEnc struct {
 	Buffer   []byte
-	metadata meta.Metadata
+	Metadata meta.Metadata
 	FrameNum int
 }
 
 func New(m meta.Metadata, fn int) JobEnc {
 	return JobEnc{
-		metadata: m,
+		Metadata: m,
 		FrameNum: fn,
 	}
 }
 
 func (j *JobEnc) Print() string {
-	return fmt.Sprintf("Job: FrameNum: %d, Meta: %s, Buffer len: %d", j.FrameNum, j.metadata.Print(), len(j.Buffer))
-}
-
-// get metadata bits
-func (j *JobEnc) GetMetadataBits(buff []byte) []bool {
-	return j.metadata.Hash(buff)
+	return fmt.Sprintf("Job: FrameNum: %d, Meta: %s, Buffer len: %d", j.FrameNum, j.Metadata.Print(), len(j.Buffer))
 }
 
 func (j *JobEnc) Update(buf []byte, bufLen int, frameNum int) {
