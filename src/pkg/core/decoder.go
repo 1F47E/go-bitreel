@@ -12,11 +12,13 @@ import (
 	"time"
 )
 
-type frame struct {
+// job for the worker
+type frameJob struct {
 	file string
 	idx  int
 }
 
+// res from the worker
 type frameRes struct {
 	data []byte
 	meta meta.Metadata
@@ -97,7 +99,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// star the workers
 	numCpu := runtime.NumCPU()
 
-	framesCh := make(chan frame, numCpu) // buff by G count
+	framesCh := make(chan frameJob, numCpu) // buff by G count
 	resChs := make([]chan frameRes, len(filesList))
 
 	// create res channels
@@ -114,7 +116,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// send all the jobs, in batches of G cnt
 	go func() {
 		for i, file := range filesList {
-			framesCh <- frame{file: file, idx: i}
+			framesCh <- frameJob{file: file, idx: i}
 			log.Debugf("Sent file %d/%d", i+1, len(filesList))
 		}
 	}()
@@ -191,7 +193,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	return out, nil
 }
 
-func workerDecode(id int, fCh <-chan frame, resChs []chan frameRes) {
+func workerDecode(id int, fCh <-chan frameJob, resChs []chan frameRes) {
 	log.Debugf("G %d started\n", id)
 	defer log.Debugf("G %d finished\n", id)
 	for {
@@ -202,16 +204,10 @@ func workerDecode(id int, fCh <-chan frame, resChs []chan frameRes) {
 		file := frame.file
 		log.Debugf("G %d got %d-%s\n", id, frame.idx, file)
 
-		frameBytes, pixErrCnt, fileBytesCnt := decodeFrame(file)
-		if pixErrCnt > 0 {
-			log.Warnf("!!! %d pixel errors corrected in file %s\n", pixErrCnt, file)
-		}
+		frameBytes, fileBytesCnt := decodeFrame(file)
 		log.Debugf("G %d decoded %s\n", id, file)
-		// pixelErrorsCount += pErrCnt
 
-		// cut metadata
-		// metadataSizeBytes := metadataSizeBits / 8
-		// substract metadata size from the fileBytesCnt
+		// split frameBytes to header and data
 		fileBytesCnt -= sizeMetadata
 		header := frameBytes[:sizeMetadata]
 		m, err := meta.Parse(header)
@@ -219,13 +215,12 @@ func workerDecode(id int, fCh <-chan frame, resChs []chan frameRes) {
 			log.Warnf("\n!!! metadata broken in file %s: %s\n", file, err)
 		}
 		log.Debugf("G %d parsed metadata in %s\n", id, file)
-		// cut out metadata head and extra tail
 		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
 
-		// do checksum check
+		// validate
 		isValid := m.Validate(data)
 		if !isValid {
-			log.Warnf("\n!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+			log.Errorf("\n!!! frame checksum and metadata checksum mismatch in file %s\n", file)
 		}
 		log.Debugf("G %d validated %s\n", id, file)
 		resChs[frame.idx] <- frameRes{
@@ -234,7 +229,6 @@ func workerDecode(id int, fCh <-chan frame, resChs []chan frameRes) {
 		}
 
 		log.Debugf("G %d sent res %s\n", id, file)
-
 	}
 }
 
@@ -279,7 +273,7 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 // when decoder reached red area if will no longer write bits to the frameBytes
 // so we need fileBytesCnt to know how many bytes to write to the file
 // fileBytesCnt will include metadata size!
-func decodeFrame(filename string) ([]byte, int, int) {
+func decodeFrame(filename string) ([]byte, int) {
 
 	// read the image
 	file, err := os.Open(filename)
@@ -352,6 +346,9 @@ func decodeFrame(filename string) ([]byte, int, int) {
 			writeIdx++
 		}
 	}
+	if pixelErrorsCount > 0 {
+		log.Warnf("Pixel errors (%d) corrected in frame: %s\n", pixelErrorsCount, filename)
+	}
 
 	// 4k video is 3840x2160 = 8294400 pixels = 2073600 4px blocks
 	// every frame should have 2073600 bits
@@ -369,5 +366,5 @@ func decodeFrame(filename string) ([]byte, int, int) {
 	// fmt.Println("bytes len:", len(bytes))
 
 	writtenBytes := writeIdx / 8
-	return bytes, pixelErrorsCount, writtenBytes
+	return bytes, writtenBytes
 }
