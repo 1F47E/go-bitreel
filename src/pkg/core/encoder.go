@@ -24,81 +24,62 @@ func workerEncode(g int, jobs <-chan job.Job) {
 
 	var err error
 	for {
-		select {
-		case j := <-jobs:
-			// TODO: detect by the size of the slice in a job is it last chunk or not
+		j, ok := <-jobs
+		if !ok {
+			return
+		}
+		// TODO: detect by the size of the slice in a job is it last chunk or not
 
-			fmt.Printf("%d G got job %+v\n", g, j)
+		fmt.Printf("G #%d got job %s\n", g, j.Print())
 
-			bufferBits := make([]bool, sizeFrame*8)
-			metadataSizeBits := sizeMetadata * 8
-			var bitIndex int
-			// NOTE: n is the number of bytes read from the file in the last chunk.
-			// if not slice with n, the last chunk will be filled with previous data
-			// because we reuse the buffer
-			for i := 0; i < len(j.Buffer); i++ {
-				// for every byte, range over all bits
-				for k := 0; k < 8; k++ {
-					// shift by metadata size header
-					// calc the bit index
-					bitIndex = metadataSizeBits + i*8 + k
-					// get the current bit of the byte
-					// buf[i]:     0 1 1 0 1 0 0 1
-					// (1<<j):     0 0 0 0 1 0 0 0  (1 has been shifted left 3 times)
-					//					   ^
-					// --------------------------------
-					// result:     0 0 0 0 1 0 0 0  (bitwise AND operation)
-					//					   ^
-					// write the bit to the buffer
-					bufferBits[bitIndex] = (j.Buffer[i] & (1 << uint(k))) != 0
-				}
+		bufferBits := make([]bool, sizeFrame*8)
+
+		// copy metadata bits with checksum
+		metadataBits := j.GetMetadataBits(j.Buffer)
+		copy(bufferBits, metadataBits)
+
+		metadataSizeBits := sizeMetadata * 8
+		var bitIndex int
+		// NOTE: n is the number of bytes read from the file in the last chunk.
+		// if not slice with n, the last chunk will be filled with previous data
+		// because we reuse the buffer
+		for i := 0; i < len(j.Buffer); i++ {
+			// range over bits
+			for k := 0; k < 8; k++ {
+				// shift by metadata size header
+				// calc the bit index
+				bitIndex = metadataSizeBits + i*8 + k
+				// get the current bit of the byte
+				// buf[i]:     0 1 1 0 1 0 0 1
+				// (1<<j):     0 0 0 0 1 0 0 0  (1 has been shifted left 3 times)
+				//					   ^
+				// --------------------------------
+				// result:     0 0 0 0 1 0 0 0  (bitwise AND operation)
+				//					   ^
+				// write the bit to the buffer
+				bufferBits[bitIndex] = (j.Buffer[i] & (1 << uint(k))) != 0
 			}
-			// bitesWriten := bitIndex - metadataSizeBits
-
-			// pixel processing
-			// c.Wg.Add(1)
-			// go func(buf [frameBufferSizeBits]bool, bi int, fn int) {
-			// bi - included metadata size
-			// at the end this number will be < frameBufferSizeBits
-			// so we can mark the end of the file
-			// defer c.Wg.Done()
-
-			// fmt.Println("Proccessing frame in G:", fn)
-			// now := time.Now()
-
-			// TODO: split into separate goroutines
-			// Encoding bits to image - around 1.5s
-			// fmt.Println("Frame start:", fn)
-			img := encodeFrame(bufferBits, bitIndex)
-			// limit := frameBufferSizeBits
-			// if bi < limit {
-			// 	// log the end
-			// 	fmt.Println("END OF FILE DETECTED. frame:", fn)
-			// 	// lot bits and bytes proccessed on the frame
-			// 	fmt.Printf("bits processed: %d, bytes: %d, frameSizeBits: %d, limit bits: %d, limit bytes: %d\n", bi, bi/8, frameBufferSizeBits, limit, limit/8)
-			// }
-			// fmt.Println("Frame done:", fn, "time:", time.Since(now), "bits processed:", bi)
-
-			// Saving image to file - around 7s
-			// now = time.Now()
-			// fmt.Println("Save start:", fn)
-			fileName := fmt.Sprintf("tmp/out/out_%08d.png", j.FrameNum)
-			err = save(fileName, img)
-			if err != nil {
-				log.Println("Error saving file:", err)
-				// NOTE: no need to continue if we can't save the file
-				panic(fmt.Sprintf("EXITING!\n\n\nError saving file: %s", err))
-			}
-			// fmt.Println("Save done. Took time:", time.Since(now))
-			// fmt.Println("Frame done:", fn)
-
-			// }(bufferBits, bitIndex, frameNumber)
-			// case <-ctx.Done():
-			// 	fmt.Println("Goroutine %d canceled", g)
-			// 	return
-			// }
 		}
 
+		fmt.Printf("G #%d Proccessing frame %d\n", g, j.FrameNum)
+		now := time.Now()
+
+		// Encoding bits to image - around 1.5s
+		fmt.Printf("G #%d Frame start: %d\n", g, j.FrameNum)
+		img := encodeFrame(bufferBits, bitIndex)
+		fmt.Printf("G #%d Frame done. Took time: %s\n", g, time.Since(now))
+
+		// Saving image to file - around 7s
+		now = time.Now()
+		fmt.Printf("G #%d Save start: %d\n", g, j.FrameNum)
+		fileName := fmt.Sprintf("tmp/out/out_%08d.png", j.FrameNum)
+		err = save(fileName, img)
+		if err != nil {
+			log.Println("Error saving file:", err)
+			// NOTE: no need to continue if we can't save the file
+			panic(fmt.Sprintf("EXITING!\n\n\nError saving file: %s", err))
+		}
+		fmt.Printf("G #%d Save done. Took time: %s\n", g, time.Since(now))
 	}
 }
 
@@ -128,12 +109,7 @@ func (c *Core) Encode(path string) error {
 
 	// ===== START WORKERS
 
-	// create context to cancel goroutines on error
-	// ctx, cancel := context.WithCancel(context.Background())
-	// defer cancel()
-
-	jobs := make(chan job.Job) // fix array size, no buffer
-
+	jobs := make(chan job.Job)
 	numCpu := runtime.NumCPU()
 
 	wg := sync.WaitGroup{}
@@ -146,44 +122,42 @@ func (c *Core) Encode(path string) error {
 		}()
 	}
 
-	time.Sleep(1 * time.Second)
-
-	// feed the bytes from the file into the workers
-	// TODO: make metadata with filename here
-	// will hold filename and timestamp (now)
-	// later will be updated with bytes and gen checksum from them
-	// On processing will be added to the buffer as header
+	// init metadata with filename and timestamp
 	md := meta.New(path)
-	frameNumber := 0
-	j := job.New(md, frameNumber)
+	frameCnt := 1
+	// job object will be updated with copy of the buffer and send to the channel
+	j := job.New(md, frameCnt)
 	// read file into the buffer by chunks
 	for {
-		// NOTE: the buffer is reused on every loop so having n is important
 		n, err := file.Read(readBuffer)
 		if err != nil {
 			if err == io.EOF {
+				fmt.Println("EOF")
 				break
 			}
 			log.Println("Error reading file:", err)
 			return err
 		}
-		// copy the buffer, do not send slice
-		j.UpdateBuffer(readBuffer, n)
+		// copy the buffer explicitly
+		j.Update(readBuffer, n, frameCnt)
+		fmt.Printf("Sending job for frame %d: %s\n", frameCnt, j.Print())
 		// this will block untill available worker pick it up
-		fmt.Println("Job: ", j.Print())
-		panic("debug")
+		fmt.Println(j.Print())
 		jobs <- j
 		_ = c.progress.Add(1)
-		frameNumber++
+		frameCnt++
 	}
+
 	// no more jobs to send, closing the channel
 	// expected all the workers to finish and exit
 	close(jobs)
+
 	// wait for all the files to be processed
 	wg.Wait()
 	fmt.Println("All workers done")
 
-	// VIDEO ENCODING
+	// ====== VIDEO ENCODING
+
 	// setup progress bar async, otherwise it wont animate
 	c.ResetProgress(-1, "Saving video...")
 	done := make(chan bool)
@@ -243,7 +217,6 @@ func bytesToBits(bytes []byte) []bool {
 	return bits
 }
 
-// TODO: make this a worker
 func encodeFrame(bits []bool, bitIndex int) *image.NRGBA {
 	// fmt.Println("Encoding frame")
 
@@ -279,7 +252,6 @@ func encodeFrame(bits []bool, bitIndex int) *image.NRGBA {
 	return img
 }
 
-// TODO: make this a worker
 func save(filePath string, img *image.NRGBA) error {
 	// make sure dir exists - create all
 	err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm)

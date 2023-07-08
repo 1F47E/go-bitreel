@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
-	"reflect"
 	"strings"
-	"testing"
 	"time"
 )
 
@@ -15,19 +13,70 @@ const metadataMaxFilenameLen = 524
 const sizeMetadata = 256
 
 type Metadata struct {
-	filename  string
+	Filename  string
 	timestamp int64
+	checksum  uint64
 }
 
 func New(path string) Metadata {
 	return Metadata{
-		filename:  encodeFilename(path),
+		Filename:  encodeFilename(path),
 		timestamp: time.Now().Unix(),
 	}
 }
 
+// METADATA parsing
+func Parse(header []byte) (Metadata, error) {
+	// fmt.Println("Parsing metadata")
+	// fmt.Println("Header len: ", len(header))
+	// fmt.Printf("Header: %v\n", header)
+
+	checksumBytes := header[:8]
+	timestampBytes := header[8:16]
+	timestamp := int64(binary.BigEndian.Uint64(timestampBytes))
+
+	filenameBytes := header[16:]
+	// fine end of the filename by /
+	end := strings.Index(string(filenameBytes), "/")
+	filename := string(filenameBytes[:end])
+
+	checksum := binary.BigEndian.Uint64(checksumBytes)
+	m := Metadata{
+		Filename:  filename,
+		timestamp: timestamp,
+		checksum:  checksum,
+	}
+	return m, nil
+}
+
+// is ok
+func (m *Metadata) IsOk() bool {
+	if len(m.Filename) > 0 && m.timestamp > 0 {
+		return true
+	}
+	return false
+}
+
 func (m *Metadata) Print() string {
-	return fmt.Sprintf("Filename: %s, Timestamp: %d", m.filename, m.timestamp)
+	return fmt.Sprintf("Filename: %s, Timestamp: %d", m.Filename, m.timestamp)
+}
+
+// datetime
+func (m *Metadata) FormatDatetime() string {
+	t := time.Unix(m.timestamp, 0)
+	localTime := t.Local()
+	fmt.Println("Local time: ", localTime)
+	return localTime.Format(time.RFC822)
+}
+
+func (m *Metadata) Checksum() uint64 {
+	return m.checksum
+}
+
+// validate
+func (m *Metadata) Validate(buff []byte) bool {
+	checksum := generateChecksum(&buff)
+	return checksum == m.checksum
 }
 
 func (m *Metadata) Hash(bytes []byte) []bool {
@@ -40,19 +89,22 @@ func (m *Metadata) Hash(bytes []byte) []bool {
 	s := 0
 	l := len(checksumBytes)
 	copy(header[s:l], checksumBytes[:])
+	fmt.Printf("META:Checksum bytes: %v\n", checksumBytes)
 
 	// copy timestamp
 	tsBytes := convertUint64ToBytes(uint64(m.timestamp))
 	binary.BigEndian.PutUint64(tsBytes, uint64(m.timestamp))
+	fmt.Printf("META:Timestamp bytes: %v\n", tsBytes)
 	s = l
 	l = s + 8
 	copy(header[s:l], tsBytes[:])
 
 	// copy filename
-	fnBytes := make([]byte, len(m.filename))
-	copy(fnBytes, []byte(m.filename))
+	fnBytes := make([]byte, len(m.Filename))
+	copy(fnBytes, []byte(m.Filename))
+	fmt.Printf("META:Filename bytes: %v\n", fnBytes)
 	s = l
-	l = s + len(m.filename)
+	l = s + len(m.Filename)
 	copy(header[s:l], fnBytes[:])
 
 	return bytesToBits(header)
@@ -74,18 +126,6 @@ func convertUint64ToBytes(num uint64) []byte {
 	return byteArray
 }
 
-// METADATA - timestamp, 64 bits
-// func encodeTimestamp() []byte {
-// 	timestamp := time.Now().Unix()
-// 	timeBytes := make([]byte, 8)
-// 	binary.BigEndian.PutUint64(timeBytes, uint64(timestamp))
-// 	return timeBytes
-// }
-
-// func (j *Job) Checksum() uint64 {
-// 	return 0
-// }
-
 func encodeFilename(path string) string {
 	// TODO: deal with too long filename
 	filename := path[strings.LastIndex(path, "/")+1:]
@@ -97,60 +137,12 @@ func encodeFilename(path string) string {
 	// printBits(filenameBits)
 }
 
-// get metadata as bits
-// func (m *Metadata) GetBits() []bool {
-//
-// 	// fill the metadata first
-// 	s := 0
-// 	l := len(checksumBits)
-// 	copy(bufferBits[s:l], checksumBits[:])
-// 	s = l
-// 	l = s + len(timeBits)
-// 	copy(bufferBits[s:l], timeBits[:])
-// 	s = l
-// 	l = s + len(filenameBits)
-// 	copy(bufferBits[s:l], filenameBits[:])
-// 	// // get metadata as bits
-// 	// filenameBits := EncodeFilename(m.filename)
-// 	// timestampBits := EncodeTimestamp()
-// 	// checksumBits := EncodeChecksum()
-// 	// // join all metadata bits
-// 	// metadataBits := append(filenameBits, timestampBits...)
-// 	// metadataBits = append(metadataBits, checksumBits...)
-// 	// return metadataBits
-// }
-
 // get datetime in users format
 func (m *Metadata) GetDatetime() string {
 	t := time.Unix(m.timestamp, 0)
 	localTime := t.Local()
 	return localTime.Format(time.RFC822)
 }
-
-// METADATA - timestamp, 64 bits
-// func EncodeTimestamp() []bool {
-// 	timestamp := time.Now().Unix()
-// 	timeBytes := make([]byte, 8)
-// 	binary.BigEndian.PutUint64(timeBytes, uint64(timestamp))
-// 	return bytesToBits(timeBytes)
-// }
-
-// METADATA - filename
-// func encodeFilename(path string) []bool {
-//
-// 	filename := path[strings.LastIndex(path, "/")+1:]
-// 	// cut too long filename
-// 	ext := filepath.Ext(filename)
-// 	maxLen := sizeMetadata - len(ext) - 2 // 2 for -- separator/ indicator of cut
-// 	if len(filename) > maxLen {
-// 		filename = fmt.Sprintf("%s--%s", filename[:maxLen], ext)
-// 	}
-// 	// add marker to the end of the filename so on decoding we know the length
-// 	filename += "/"
-// 	return bytesToBits([]byte(filename))
-// 	// fmt.Println("filename", filename)
-// 	// printBits(filenameBits)
-// }
 
 func bytesToBits(bytes []byte) []bool {
 	bits := make([]bool, 8*len(bytes))
@@ -160,61 +152,4 @@ func bytesToBits(bytes []byte) []bool {
 		}
 	}
 	return bits
-}
-
-func TestConvertUint64ToBytes(t *testing.T) {
-
-	testCases := []struct {
-		name string
-		num  uint64
-		want []byte
-	}{
-		{
-			name: "Test 1",
-			num:  1234567890,
-			want: []byte{0x49, 0x96, 0x2d, 0x2, 0x0, 0x0, 0x0, 0x0},
-		},
-		{
-			name: "Test 2",
-			num:  9876543210,
-			want: []byte{0x49, 0x96, 0x2d, 0x2e, 0x0, 0x0, 0x0, 0x0},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := convertUint64ToBytes(tc.num)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("got %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestBytesToBits(t *testing.T) {
-	testCases := []struct {
-		name  string
-		bytes []byte
-		want  []bool
-	}{
-		{
-			name:  "Test case 1: Single byte",
-			bytes: []byte{0x2}, // Binary: 00000010
-			want:  []bool{false, true, false, false, false, false, false, false},
-		},
-		{
-			name:  "Test case 2: Multiple bytes",
-			bytes: []byte{0x2, 0x3}, // Binary: 00000010 00000011
-			want:  []bool{false, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := bytesToBits(tc.bytes)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("got %v, want %v", got, tc.want)
-			}
-		})
-	}
 }

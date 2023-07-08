@@ -28,6 +28,11 @@ func (j *Job) Print() string {
 	return fmt.Sprintf("Job: FrameNum: %d, Meta: %s, Buffer len: %d", j.FrameNum, j.metadata.Print(), len(j.Buffer))
 }
 
+// get metadata bits
+func (j *Job) GetMetadataBits(buff []byte) []bool {
+	return j.metadata.Hash(buff)
+}
+
 // func (j *Job) GetBits() []bool {
 // 	// fill the metadata first
 // 	s := 0
@@ -47,11 +52,12 @@ func (j *Job) Print() string {
 // 	// return metadataBits
 // }
 
-func (j *Job) UpdateBuffer(b []byte, n int) {
+func (j *Job) Update(buf []byte, bufLen int, frameNum int) {
 	// copy buffer to avoid overwriting of the same buffer
-	cp := make([]byte, n)
-	_ = copy(cp, b[:n])
+	cp := make([]byte, bufLen)
+	_ = copy(cp, buf[:bufLen])
 	j.Buffer = cp
+	j.FrameNum = frameNum
 }
 
 // get datetime in users format

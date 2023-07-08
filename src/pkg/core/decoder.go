@@ -1,7 +1,7 @@
 package core
 
 import (
-	"encoding/binary"
+	"bytereel/pkg/meta"
 	"fmt"
 	"image/png"
 	"log"
@@ -82,9 +82,10 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	defer os.Remove(tmpFile.Name()) // clean up
 
 	var bytesWritten, pixelErrorsCount int
-	var metaTimestamp int64
-	var metaFilename string
-	var metaChecksum uint64
+	// var metaTimestamp int64
+	// var metaFilename string
+	// var metaChecksum uint64
+	var m meta.Metadata
 	for _, file := range filesList {
 		// fmt.Println("Decoding", file)
 
@@ -101,9 +102,19 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		// metadataSizeBytes := metadataSizeBits / 8
 		// substract metadata size from the fileBytesCnt
 		fileBytesCnt -= sizeMetadata
-		meta := frameBytes[:sizeMetadata]
+		header := frameBytes[:sizeMetadata]
+		m, err = meta.Parse(header)
+		if err != nil {
+			log.Printf("!!! metadata broken in file %s: %s\n", file, err)
+		}
 		// cut out metadata head and extra tail
 		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
+
+		// do checksum check
+		isValid := m.Validate(data)
+		if !isValid {
+			log.Printf("!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+		}
 
 		// write data to the file
 		written, err := tmpFile.Write(data)
@@ -112,33 +123,6 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		}
 		bytesWritten += written
 
-		// METADATA parsing
-
-		// check checksum
-		if metaChecksum == 0 {
-			checksumBytes := meta[:8]
-			// convert bytes to uint64
-			metaChecksum = binary.BigEndian.Uint64(checksumBytes)
-		}
-
-		if metaTimestamp == 0 {
-			timeBytes := meta[8:16]
-			metaTimestamp = int64(binary.BigEndian.Uint64(timeBytes))
-			fmt.Println("METADATA timestamp:", metaTimestamp)
-		}
-		if metaFilename == "" {
-			metaFilenameBuff := meta[16:]
-			bStr := string(metaFilenameBuff)
-			// cut filename to size
-			// search for the market "end of filename" - byte "/"
-			delimiterIndex := strings.Index(bStr, "/")
-			if delimiterIndex != -1 {
-				metaFilename = bStr[:delimiterIndex]
-				fmt.Println("METADATA filename:", metaFilename, "len", len(metaFilename))
-			} else {
-				fmt.Println("!!!METADATA filename EOF not found", len(bStr), string(bStr))
-			}
-		}
 		// TODO: do checksum of the bytes
 
 		err = c.progress.Add(1)
@@ -163,28 +147,14 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	if pixelErrorsCount > 0 {
 		log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
 	}
-	// will try to replace it with the original file filename from metadata
-	out = tmpFile.Name()
 
 	// check metadata
 	// report time from metadata
-	if metaTimestamp != 0 {
-		metaunix := time.Unix(metaTimestamp, 0)
-		// format to datetime
-		fmt.Println("Time from metadata:", metaunix.Format("2006-01-02 15:04:05"))
-		// metaDatetime = metaunix.Format("2006-01-02_15-04-05")
-	}
-	if metaFilename != "" {
-		fmt.Println("Filename found in metadata:", metaFilename)
-		// rename tmp file to the original filename
-		// if metaDatetime != "" {
-		// 	metaFilename = fmt.Sprintf("%s_%s", metaDatetime, metaFilename)
-		// }
-		// outputFilename := fmt.Sprintf("decoded_%s", metaFilename)
-		out = fmt.Sprintf("decoded_%s", metaFilename)
-
+	if m.IsOk() {
+		out = m.Filename
 	} else {
-		fmt.Println("No filename found in metadata")
+		fmt.Println("!!! No metadata found")
+		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
 	// do rename
@@ -231,7 +201,7 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 			l := len(files)
 			if l > prevCount {
 				prevCount = l
-				c.progress.Set(l)
+				_ = c.progress.Set(l)
 			}
 		case <-done:
 			return
