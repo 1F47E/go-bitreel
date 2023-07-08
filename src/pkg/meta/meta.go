@@ -13,6 +13,7 @@ var log = logger.Log
 
 const metadataMaxFilenameLen = 524
 const sizeMetadata = 256
+const metadataEOFMarker = "/"
 
 type Metadata struct {
 	Filename  string
@@ -38,8 +39,8 @@ func Parse(header []byte) (Metadata, error) {
 	timestamp := int64(binary.BigEndian.Uint64(timestampBytes))
 
 	filenameBytes := header[16:]
-	// fine end of the filename by /
-	end := strings.Index(string(filenameBytes), "/")
+	// fine end of the filename by marker
+	end := strings.Index(string(filenameBytes), metadataEOFMarker)
 	filename := string(filenameBytes[:end])
 
 	checksum := binary.BigEndian.Uint64(checksumBytes)
@@ -131,7 +132,7 @@ func encodeFilename(path string) string {
 	// TODO: deal with too long filename
 	filename := path[strings.LastIndex(path, "/")+1:]
 	// add marker to the end of the filename so on decoding we know the end
-	filename += "/"
+	filename += metadataEOFMarker
 	return filename
 	// return bytesToBits([]byte(filename))
 	// fmt.Println("filename", filename)

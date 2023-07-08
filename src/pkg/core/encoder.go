@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func workerEncode(g int, jobs <-chan job.Job) {
+func workerEncode(g int, jobs <-chan job.JobEnc) {
 	log.Debugf("Goroutine %d started\n", g)
 	defer log.Debugf("Goroutine %d finished\n", g)
 
@@ -108,7 +108,7 @@ func (c *Core) Encode(path string) error {
 
 	// ===== START WORKERS
 
-	jobs := make(chan job.Job)
+	jobs := make(chan job.JobEnc)
 	numCpu := runtime.NumCPU()
 
 	wg := sync.WaitGroup{}
@@ -193,27 +193,6 @@ func (c *Core) Encode(path string) error {
 	log.Debug("\nVideo encoded")
 
 	return nil
-}
-
-func printBits(bits []bool) {
-	for _, b := range bits {
-		if b {
-			fmt.Print("1")
-		} else {
-			fmt.Print("0")
-		}
-	}
-	log.Debug()
-}
-
-func bytesToBits(bytes []byte) []bool {
-	bits := make([]bool, 8*len(bytes))
-	for i, b := range bytes {
-		for j := 0; j < 8; j++ {
-			bits[i*8+j] = (b & (1 << uint(j))) != 0
-		}
-	}
-	return bits
 }
 
 func encodeFrame(bits []bool, bitIndex int) *image.NRGBA {

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytereel/pkg/job"
 	"bytereel/pkg/meta"
 	"fmt"
 	"image/png"
@@ -12,17 +13,17 @@ import (
 	"time"
 )
 
-// job for the worker
-type frameJob struct {
-	file string
-	idx  int
-}
-
-// res from the worker
-type frameRes struct {
-	data []byte
-	meta meta.Metadata
-}
+// // job for the worker
+// type frameJob struct {
+// 	file string
+// 	idx  int
+// }
+//
+// // res from the worker
+// type frameRes struct {
+// 	data []byte
+// 	meta meta.Metadata
+// }
 
 func (c *Core) Decode(videoFile string) (string, error) {
 	var err error
@@ -99,12 +100,12 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// star the workers
 	numCpu := runtime.NumCPU()
 
-	framesCh := make(chan frameJob, numCpu) // buff by G count
-	resChs := make([]chan frameRes, len(filesList))
+	framesCh := make(chan job.JobDec, numCpu) // buff by G count
+	resChs := make([]chan job.JobDecRes, len(filesList))
 
 	// create res channels
 	for i := 0; i < len(filesList); i++ {
-		resChs[i] = make(chan frameRes, 1)
+		resChs[i] = make(chan job.JobDecRes, 1)
 	}
 
 	log.Debugf("Starting %d workers", numCpu)
@@ -116,7 +117,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// send all the jobs, in batches of G cnt
 	go func() {
 		for i, file := range filesList {
-			framesCh <- frameJob{file: file, idx: i}
+			framesCh <- job.JobDec{File: file, Idx: i}
 			log.Debugf("Sent file %d/%d", i+1, len(filesList))
 		}
 	}()
@@ -128,13 +129,13 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		fr := <-ch
 
 		// set metadata if not set already
-		if fr.meta.IsOk() && !metadata.IsOk() {
-			metadata = fr.meta
+		if fr.Meta.IsOk() && !metadata.IsOk() {
+			metadata = fr.Meta
 			log.Warnf("Metadata found: %s", metadata.Print())
 		}
 
-		log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.data))
-		written, err := tmpFile.Write(fr.data)
+		log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.Data))
+		written, err := tmpFile.Write(fr.Data)
 		if err != nil {
 			log.Fatal("Cannot write to file:", err)
 		}
@@ -180,7 +181,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	return out, nil
 }
 
-func workerDecode(id int, fCh <-chan frameJob, resChs []chan frameRes) {
+func workerDecode(id int, fCh <-chan job.JobDec, resChs []chan job.JobDecRes) {
 	log.Debugf("G %d started\n", id)
 	defer log.Debugf("G %d finished\n", id)
 	for {
@@ -188,8 +189,8 @@ func workerDecode(id int, fCh <-chan frameJob, resChs []chan frameRes) {
 		if !ok {
 			return
 		}
-		file := frame.file
-		log.Debugf("G %d got %d-%s\n", id, frame.idx, file)
+		file := frame.File
+		log.Debugf("G %d got %d-%s\n", id, frame.Idx, file)
 
 		frameBytes, fileBytesCnt := decodeFrame(file)
 		log.Debugf("G %d decoded %s\n", id, file)
@@ -210,9 +211,9 @@ func workerDecode(id int, fCh <-chan frameJob, resChs []chan frameRes) {
 			log.Errorf("\n!!! frame checksum and metadata checksum mismatch in file %s\n", file)
 		}
 		log.Debugf("G %d validated %s\n", id, file)
-		resChs[frame.idx] <- frameRes{
-			data: data,
-			meta: m,
+		resChs[frame.Idx] <- job.JobDecRes{
+			Data: data,
+			Meta: m,
 		}
 
 		log.Debugf("G %d sent res %s\n", id, file)
