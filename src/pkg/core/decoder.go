@@ -1,10 +1,9 @@
 package core
 
 import (
-	"encoding/binary"
+	"bytereel/pkg/meta"
 	"fmt"
 	"image/png"
-	"log"
 	"os"
 	"os/exec"
 	"sort"
@@ -40,7 +39,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// Call ffmpeg to decode the video into frames
 	cmdStr := fmt.Sprintf("ffmpeg -y -i %s %s", videoFile, framesPath)
 	cmdList := strings.Split(cmdStr, " ")
-	// fmt.Println("Running ffmpeg command:", cmdStr)
+	log.Debugf("Running ffmpeg command:", cmdStr)
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	err = cmd.Run()
 	if err != nil {
@@ -68,7 +67,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	if len(filesList) == 0 {
 		log.Fatal("No files to decode")
 	}
-	fmt.Println("total frames:", len(filesList))
+	log.Debugf("total frames: %d", len(filesList))
 	sort.Strings(filesList)
 
 	// setup progress bar
@@ -82,12 +81,12 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	defer os.Remove(tmpFile.Name()) // clean up
 
 	var bytesWritten, pixelErrorsCount int
-	var metaTime int64
-	var metaDatetime string
-	var metaFilename string
-	var metaChecksum uint64
+	// var metaTimestamp int64
+	// var metaFilename string
+	// var metaChecksum uint64
+	var m meta.Metadata
 	for _, file := range filesList {
-		// fmt.Println("Decoding", file)
+		log.Debug("Decoding", file)
 
 		// NOTE:
 		// when decoder reached red area if will no longer write bits to the frameBytes
@@ -99,12 +98,22 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		pixelErrorsCount += pErrCnt
 
 		// cut metadata
-		metadataSizeBytes := metadataSizeBits / 8
+		// metadataSizeBytes := metadataSizeBits / 8
 		// substract metadata size from the fileBytesCnt
-		fileBytesCnt -= metadataSizeBytes
-		meta := frameBytes[:metadataSizeBytes]
+		fileBytesCnt -= sizeMetadata
+		header := frameBytes[:sizeMetadata]
+		m, err = meta.Parse(header)
+		if err != nil {
+			log.Warnf("!!! metadata broken in file %s: %s\n", file, err)
+		}
 		// cut out metadata head and extra tail
-		data := frameBytes[metadataSizeBytes : metadataSizeBytes+fileBytesCnt]
+		data := frameBytes[sizeMetadata : sizeMetadata+fileBytesCnt]
+
+		// do checksum check
+		isValid := m.Validate(data)
+		if !isValid {
+			log.Warnf("!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+		}
 
 		// write data to the file
 		written, err := tmpFile.Write(data)
@@ -113,33 +122,6 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		}
 		bytesWritten += written
 
-		// METADATA parsing
-
-		// check checksum
-		if metaChecksum == 0 {
-			checksumBytes := meta[:8]
-			// convert bytes to uint64
-			metaChecksum = binary.BigEndian.Uint64(checksumBytes)
-		}
-
-		if metaTime == 0 {
-			timeBytes := meta[8:16]
-			metaTime = int64(binary.BigEndian.Uint64(timeBytes))
-			fmt.Println("METADATA time:", metaTime)
-		}
-		if metaFilename == "" {
-			metaFilenameBuff := meta[16:]
-			bStr := string(metaFilenameBuff)
-			// cut filename to size
-			// search for the market "end of filename" - byte "/"
-			delimiterIndex := strings.Index(bStr, "/")
-			if delimiterIndex != -1 {
-				metaFilename = bStr[:delimiterIndex]
-				fmt.Println("METADATA filename:", metaFilename, "len", len(metaFilename))
-			} else {
-				fmt.Println("!!!METADATA filename EOF not found", len(bStr), string(bStr))
-			}
-		}
 		// TODO: do checksum of the bytes
 
 		err = c.progress.Add(1)
@@ -162,44 +144,30 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	}
 
 	if pixelErrorsCount > 0 {
-		log.Printf("Pixel errors corrected: %d\n", pixelErrorsCount)
+		log.Warn("Pixel errors corrected: %d\n", pixelErrorsCount)
 	}
-	// will try to replace it with the original file filename from metadata
-	out = tmpFile.Name()
 
 	// check metadata
 	// report time from metadata
-	if metaTime != 0 {
-		metaunix := time.Unix(metaTime, 0)
-		// format to datetime
-		fmt.Println("Time from metadata:", metaunix.Format("2006-01-02 15:04:05"))
-		metaDatetime = metaunix.Format("2006-01-02_15-04-05")
-	}
-	if metaFilename != "" {
-		fmt.Println("Filename found in metadata:", metaFilename)
-		// rename tmp file to the original filename
-		if metaDatetime != "" {
-			metaFilename = fmt.Sprintf("%s_%s", metaDatetime, metaFilename)
-		}
-		// outputFilename := fmt.Sprintf("decoded_%s", metaFilename)
-		out = fmt.Sprintf("decoded_%s", metaFilename)
-
+	if m.IsOk() {
+		out = m.Filename
 	} else {
-		fmt.Println("No filename found in metadata")
+		log.Warn("!!! No metadata found")
+		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
 	// do rename
 	err = os.Rename(tmpFile.Name(), out)
 	if err != nil {
-		log.Println("Cant rename a file to ", out)
+		log.Error("Cant rename a file to ", out)
 		return out, err
 	}
-	log.Printf("\n\nWrote %d bytes to %s\n", bytesWritten, out)
+	log.Infof("\n\nWrote %d bytes to %s\n", bytesWritten, out)
 
 	// cleanup frames dir
 	err = os.RemoveAll(framesDir)
 	if err != nil {
-		fmt.Println("!!! Cannot remove frames dir:", err)
+		log.Warn("!!! Cannot remove frames dir:", err)
 	}
 	return out, nil
 }
@@ -213,7 +181,7 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 	}
 	videoFileSize := fileInfo.Size()
 	totalFramesCount := int(videoFileSize/frameFileSize - 1) // 3% error
-	fmt.Println("Total frames count estimated:", totalFramesCount)
+	log.Debug("Total frames count estimated:", totalFramesCount)
 
 	ticker := time.NewTicker(time.Second / 10)
 	defer ticker.Stop()
@@ -225,14 +193,14 @@ func (c *Core) framerReporter(dir string, videoFile string, done <-chan bool) {
 			// scan dir
 			files, err := os.ReadDir(dir)
 			if err != nil {
-				log.Println("scanning dir error:", err)
+				log.Warn("scanning dir error:", err)
 				break
 			}
 			// count files
 			l := len(files)
 			if l > prevCount {
 				prevCount = l
-				c.progress.Set(l)
+				_ = c.progress.Set(l)
 			}
 		case <-done:
 			return
@@ -255,7 +223,8 @@ func decodeFrame(filename string) ([]byte, int, int) {
 		log.Fatal("Cannot decode file:", err)
 	}
 
-	var fileBits [frameSizeBits]bool
+	var fileBits [sizeFrame * 8]bool
+	// fileBits := make([]bool, sizeFrame*8)
 
 	// copy image to bytes
 	var writeIdx int

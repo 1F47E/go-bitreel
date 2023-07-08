@@ -1,51 +1,47 @@
 package core
 
 import (
-	"sync"
+	"bytereel/pkg/logger"
 
 	"github.com/schollz/progressbar/v3"
 )
 
-// Amount of bits in 1 4k frame
-// 3840*2160/4 = 2073600
-// const frameSizeBits = 2073600 bits
+var log = logger.Log
+
+// NOTE: img pixels are writter from left to right, top to bottom
+
+// 4k
 const frameWidth = 3840
 const frameHeight = 2160
 const frameFileSize = 7684000 // estimated
 
-const pixelSize = 4
-
-// NOTE: img pixels are writter from left to right, top to bottom
-
-// reserve first row for metadata
-// in 4k its 2160 pixels / 4 = 540 bytes
-// example
-// 64 bits for checksum - 8 bytes
-// unix timestamp - 8 bytes
-// filename - the rest - 524 bytes
-const metadataMaxFilenameLen = 524
-const metadataSizeBits = frameWidth / pixelSize
+// all sizes are in bytes
+const sizeFrameWidth = 3840
+const sizeFrameHeight = 2160
+const sizeFrameFile = 7684000 // estimated
+const sizePixel = 4
+const sizeMetadata = 256
 
 // 250kb on 4k
-const frameSizeBits = frameWidth * frameHeight / pixelSize
-const frameBufferSizeBits = frameSizeBits + metadataSizeBits
+// on 4k 3840*2160/4/8 = 259200 bytes = about 250kb
+const sizeFrame = sizeFrameWidth * sizeFrameHeight / sizePixel / 8
 
 type Core struct {
 	progress *progressbar.ProgressBar
-	Wg       sync.WaitGroup
+	// Wg       sync.WaitGroup
 }
 
 func NewCore() *Core {
 	return &Core{
 		progress: nil,
-		Wg:       sync.WaitGroup{},
+		// Wg:       sync.WaitGroup{},
 	}
 }
 
 // reinit progress bar becuase of some bug
 func (c *Core) ResetProgress(max int, desc string) {
 	if c.progress != nil {
-		c.progress.Clear()
+		_ = c.progress.Clear()
 		c.progress.Reset()
 	}
 	c.progress = progressbar.NewOptions(max,
