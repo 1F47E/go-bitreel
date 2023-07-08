@@ -2,20 +2,22 @@ package main
 
 import (
 	"bytereel/pkg/core"
-	"os"
-
 	"bytereel/pkg/logger"
+	"os"
 )
 
 var log = logger.Log
 
 func main() {
-
 	c := core.NewCore()
+
 	// read cmd line args
 	args := os.Args[1:]
 	if len(args) < 2 {
-		log.Error("d dir - decode pics in a dir, e file - encode a file")
+		log.Info("e file - encode a file")
+		log.Info("d dir - decode pics in a dir")
+		log.Info("test file - encode, decode, compare")
+		return
 	}
 	command := args[0]
 	arg := args[1]
