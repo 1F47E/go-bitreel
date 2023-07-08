@@ -51,6 +51,9 @@ func main() {
 		} else {
 			log.Println("Success: files are the same")
 		}
+		// cleanup
+		_ = os.Remove(videoFile)
+		_ = os.Remove(out)
 	}
 
 }
