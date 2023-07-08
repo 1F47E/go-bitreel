@@ -149,27 +149,8 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	}
 	log.Debug("Closing frames channel")
 	close(framesCh)
-	log.Debugf("bytes written: %d", bytesWritten)
-
-	// close the file so we can rename it
-	// Ensure data is written to disk
-	err = tmpFile.Sync()
-	if err != nil {
-		log.Fatal("Cannot sync file:", err)
-	}
-
-	// Close the file before renaming/moving it
-	err = tmpFile.Close()
-	if err != nil {
-		log.Fatal("Cannot close file:", err)
-	}
-
-	// if pixelErrorsCount > 0 {
-	// 	log.Warn("Pixel errors corrected: %d\n", pixelErrorsCount)
-	// }
 
 	// check metadata
-	// report time from metadata
 	if metadata.IsOk() {
 		out = metadata.Filename
 	} else {
@@ -177,15 +158,21 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
-	// do rename
+	// Write the data to the file and clear tmp folder with frames
+	err = tmpFile.Sync()
+	if err != nil {
+		log.Fatal("Cannot sync file:", err)
+	}
+	err = tmpFile.Close()
+	if err != nil {
+		log.Fatal("Cannot close file:", err)
+	}
 	err = os.Rename(tmpFile.Name(), out)
 	if err != nil {
 		log.Error("Cant rename a file to ", out)
 		return out, err
 	}
 	log.Infof("\n\nWrote %d bytes to %s\n", bytesWritten, out)
-
-	// cleanup frames dir
 	err = os.RemoveAll(framesDir)
 	if err != nil {
 		log.Warn("!!! Cannot remove frames dir:", err)
