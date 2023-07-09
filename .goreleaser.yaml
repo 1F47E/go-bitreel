@@ -12,14 +12,14 @@ builds:
     goarch:
       - amd64
       - arm64
-    targets:
-      - linux_amd64
-      - darwin_amd64
-      - darwin_arm64
-      - windows_amd64
+    # targets:
+    #   - linux_amd64
+    #   - darwin_amd64
+    #   - darwin_arm64
+    #   - windows_amd64
     ldflags:
       - -s -w
-    main: ./cmd/app
+    main: ./cmd/app/main.go
     binary: bytereel
 
 archives:
@@ -51,3 +51,16 @@ changelog:
 # Feel free to remove those if you don't want/use them.
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+brews:
+  - name: bytereel
+    # ids:
+    #   - bytereel
+    url_template: "https://github.com/kaspar1ndustries/go-bytereel/releases/download/{{ .Tag }}/bytereel_{{ .Tag }}_{{ .Os }}_{{ .Arch }}.tar.gz"
+    homepage: "https://github.com/kaspar1ndustries/go-bytereel"
+    description: "ByteReel converts any file to a video"
+    tap:
+      owner: kaspar1ndustries
+      name: homebrew-tap
+    test: |
+      system "#{bin}/bytereel", ""
