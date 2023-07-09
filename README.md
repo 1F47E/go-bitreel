@@ -29,6 +29,11 @@ The final step involves encoding these frames into a video using ffmpeg.<br>
 
 - ffmpeg
 
+### Install
+```
+brew tap kaspar1ndustries/homebrew-tap
+brew install bytereel
+```
 
 
 ### TODO
