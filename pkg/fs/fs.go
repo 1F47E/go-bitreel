@@ -3,16 +3,17 @@ package fs
 
 import (
 	cfg "bytereel/pkg/config"
+	"bytereel/pkg/logger"
 	"fmt"
 	"image"
 	"image/png"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
+var log = logger.Log
 var framesDir = cfg.PathFramesDir
 
 func CreateFramesDir() (string, error) {
@@ -84,7 +85,12 @@ func SaveFrame(frameNum int, img *image.NRGBA) error {
 	}
 
 	imgFile, err := os.Create(filePath)
-	defer imgFile.Close()
+	defer func() {
+		err := imgFile.Close()
+		if err != nil {
+			log.Errorf("Cannot close file: %s", err)
+		}
+	}()
 	if err != nil {
 		log.Println("Cannot create file:", err)
 		return fmt.Errorf("Cannot create file: %s", err)

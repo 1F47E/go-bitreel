@@ -1,19 +1,17 @@
 package meta
 
 import (
+	cfg "bytereel/pkg/config"
 	"bytereel/pkg/logger"
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 var log = logger.Log
-
-const metadataMaxFilenameLen = 524
-const sizeMetadata = 256
-const metadataEOFMarker = "/"
 
 type Metadata struct {
 	Filename  string
@@ -40,7 +38,7 @@ func Parse(header []byte) (Metadata, error) {
 
 	filenameBytes := header[16:]
 	// fine end of the filename by marker
-	end := strings.Index(string(filenameBytes), metadataEOFMarker)
+	end := strings.Index(string(filenameBytes), cfg.MetadataEOFMarker)
 	filename := string(filenameBytes[:end])
 
 	checksum := binary.BigEndian.Uint64(checksumBytes)
@@ -52,7 +50,6 @@ func Parse(header []byte) (Metadata, error) {
 	return m, nil
 }
 
-// is ok
 func (m *Metadata) IsOk() bool {
 	if len(m.Filename) > 0 && m.timestamp > 0 {
 		return true
@@ -61,10 +58,9 @@ func (m *Metadata) IsOk() bool {
 }
 
 func (m *Metadata) Print() string {
-	return fmt.Sprintf("Filename: %s, Timestamp: %d", m.Filename, m.timestamp)
+	return fmt.Sprintf("Filename: %s, Timestamp: %d (%s)", m.Filename, m.timestamp, m.FormatDatetime())
 }
 
-// datetime
 func (m *Metadata) FormatDatetime() string {
 	t := time.Unix(m.timestamp, 0)
 	localTime := t.Local()
@@ -84,7 +80,7 @@ func (m *Metadata) Validate(buff []byte) bool {
 
 func (m *Metadata) Hash(bytes []byte) []bool {
 
-	header := make([]byte, sizeMetadata)
+	header := make([]byte, cfg.SizeMetadata)
 	checksum := generateChecksum(&bytes)
 	checksumBytes := convertUint64ToBytes(checksum)
 
@@ -129,10 +125,14 @@ func convertUint64ToBytes(num uint64) []byte {
 }
 
 func encodeFilename(path string) string {
-	// TODO: deal with too long filename
 	filename := path[strings.LastIndex(path, "/")+1:]
+	if len(filename) > cfg.MetadataMaxFilenameLen {
+		ext := filepath.Ext(filename) // with a dot
+		maxLen := cfg.MetadataMaxFilenameLen - len(ext) - len(cfg.MetadataFilenameCutDelimeter) - len(cfg.MetadataEOFMarker)
+		filename = filename[:maxLen] + cfg.MetadataFilenameCutDelimeter + ext
+	}
 	// add marker to the end of the filename so on decoding we know the end
-	filename += metadataEOFMarker
+	filename += cfg.MetadataEOFMarker
 	return filename
 	// return bytesToBits([]byte(filename))
 	// fmt.Println("filename", filename)
