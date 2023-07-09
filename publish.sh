@@ -11,7 +11,7 @@ while true; do
 done
 
 echo "Pushing new tag: $new_tag"
-# git push
+git push
 git tag -a $new_tag -m "release $new_tag"
 git push --tags
 echo "Building release"
