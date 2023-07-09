@@ -13,11 +13,16 @@ const (
 	SizePixel       = 4
 	SizeMetadata    = 256
 
+	// meta
+	MetadataMaxFilenameLen       = 524 // size left in the meta header
+	MetadataEOFMarker            = "/"
+	MetadataFilenameCutDelimeter = "--"
+
 	// 250kb on 4k
 	// on 4k 3840*2160/4/8 = 259200 bytes = about 250kb
-	SizeFrame    = SizeFrameWidth * SizeFrameHeight / SizePixel / 8
+	SizeFrame = SizeFrameWidth * SizeFrameHeight / SizePixel / 8
 
 	// Path
 	PathFramesDir = "tmp/frames"
-	PathVideoOut = "tmp/out.mov"
+	PathVideoOut  = "tmp/out.mov"
 )
