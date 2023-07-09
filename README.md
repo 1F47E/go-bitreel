@@ -11,12 +11,14 @@
 
 So you can upload it to video hosting and have an infinite* tape storage like in a good old days.
 
+
 ### How it works?
 
-Encoding file to a video is done by representing every bit as a black (1) or white (0) 2x2 pixels square.
-Due to this process, the resulting video will be approximately 4 times the size of your original file
-A checksum for each frame is calculated and incorporated as metadata, ensuring the integrity of your data.
-The final step involves encoding these frames into a video using ffmpeg
+Encoding file to a video is done by representing every bit as a black (1) or white (0) 2x2 pixels square.<br>
+Due to this process, the resulting video will be approximately 4 times the size of your original file.<br>
+A checksum for each frame is calculated and incorporated as metadata, ensuring the integrity of your data.<br>
+The final step involves encoding these frames into a video using ffmpeg.<br>
+
 
 ### Dependencies
 
