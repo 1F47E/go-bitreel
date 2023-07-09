@@ -56,7 +56,7 @@ brews:
   - name: bytereel
     # ids:
     #   - bytereel
-    url_template: "https://github.com/kaspar1ndustries/go-bytereel/releases/download/{{ .Tag }}/{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.tar.gz"
+    url_template: "https://github.com/kaspar1ndustries/go-bytereel/releases/download/{{ .Tag }}/{{ .Binary }}_{{ title .Os }}_{{ .Arch }}.tar.gz"
     homepage: "https://github.com/kaspar1ndustries/go-bytereel"
     description: "ByteReel converts any file to a video"
     tap:
