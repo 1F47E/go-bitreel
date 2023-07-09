@@ -42,3 +42,4 @@ func progressCreate(max int, desc string) *progressbar.ProgressBar {
 			BarEnd:        "]",
 		}))
 }
+
