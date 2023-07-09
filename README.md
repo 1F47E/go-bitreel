@@ -3,7 +3,7 @@
 
 
 <br><br>
-<h1>ByteReel transforms any file to a video</h1>
+<h1>bytereel converts any file to a video</h1>
 <br><br>
 </div>
 
