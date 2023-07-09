@@ -3,6 +3,8 @@ before:
   hooks:
     - go mod tidy
 builds:
+# include version in the binary
+# RUN CGO_ENABLED=0 go build -ldflags="-X main.version=$GIT_TAG -X main.buildTime=$BUILD_TIME" -a -installsuffix cgo -o app .
   - env:
       - CGO_ENABLED=0
     goos:
@@ -18,7 +20,7 @@ builds:
     #   - darwin_arm64
     #   - windows_amd64
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{ .Tag }}
     main: ./cmd/app/main.go
     binary: bytereel
 
