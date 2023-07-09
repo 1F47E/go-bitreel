@@ -11,11 +11,11 @@ while true; do
 done
 
 echo "Pushing new tag: $new_tag"
-git push
-git tag $new_tag
+# git push
+git tag -a $new_tag -m "release $new_tag"
+git push --tags
 echo "Building release"
 rm -rf ./dist
 #goreleaser release --snapshot --clean
 goreleaser release
-# git push --tags
 #git push origin $new_tag
