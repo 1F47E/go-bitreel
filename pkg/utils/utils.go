@@ -4,9 +4,9 @@ import (
 	"bytereel/pkg/logger"
 )
 
-var log = logger.Log
-
+//nolint:unused
 func printBits(bits []bool) {
+	var log = logger.Log
 	for _, b := range bits {
 		if b {
 			log.Info("1")
@@ -17,6 +17,7 @@ func printBits(bits []bool) {
 	log.Debug()
 }
 
+//nolint:unused
 func bytesToBits(bytes []byte) []bool {
 	bits := make([]bool, 8*len(bytes))
 	for i, b := range bytes {
