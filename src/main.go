@@ -10,6 +10,8 @@ var log = logger.Log
 
 func main() {
 
+	// TODO: make nice cli with flags
+
 	// read cmd line args
 	args := os.Args[1:]
 	if len(args) < 2 {
@@ -32,29 +34,16 @@ func main() {
 		}
 	} else if command == "test" {
 		// encode + decode + compare
-		err := core.Encode(arg)
+		same, err := core.Compare(arg)
 		if err != nil {
-			log.Fatalf("Error encoding video: %v", err)
+			log.Fatalf("Error comparing video: %v", err)
 		}
-		videoFile := "tmp/out.mov"
-		out, err := core.Decode(videoFile)
-		if err != nil {
-			log.Fatalf("Error decoding video: %v", err)
-		}
-		// compare files
-		same, err := core.Compare(arg, out)
-		if err != nil {
-			log.Fatalf("Error comparing files: %v", err)
-		}
-		// assert if not same
-		if !same {
-			log.Fatalf("Error: files are not the same")
+		if same {
+			log.Info("Files are the same")
 		} else {
-			log.Println("Success: files are the same")
+			log.Error("Files are different")
 		}
-		// cleanup
-		_ = os.Remove(videoFile)
-		_ = os.Remove(out)
+
 	}
 
 }
