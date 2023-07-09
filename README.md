@@ -1,28 +1,30 @@
-__________          __        __________              .__   
-\______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
- |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
- |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
- |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
-        \/ \/                \/       \/     \/     \/
+<div align="center">
+<img src="https://github.com/kaspar1ndustries/go-bytereel/blob/master/docs/cover.png?raw=true" height="420">
 
 
-ByteReel transforms any file to a video file.
-Then you can upload it to video hosting and have tape storage like in good old days.
+<br><br>
+<h1>ByteReel transforms any file to a video</h1>
+<br><br>
+</div>
 
-How it works
+### Yes but why?
+
+So you can upload it to video hosting and have an infinite* tape storage like in a good old days.
+
+### How it works?
 
 Encoding file to a video is done by representing every bit as a black (1) or white (0) 2x2 pixels square.
 Due to this process, the resulting video will be approximately 4 times the size of your original file
 A checksum for each frame is calculated and incorporated as metadata, ensuring the integrity of your data.
 The final step involves encoding these frames into a video using ffmpeg
 
-Dependencies:
+### Dependencies
 
 - ffmpeg
 
 
 
-TODO
+### TODO
 
 - [x] encode file to frames
 - [x] decode file from frames
@@ -36,13 +38,28 @@ TODO
 - [x] decode video
 - [x] check checksum on decode
 - [x] add workers, limit to cpu cores
+- [ ] release tap on homebrew
 - [ ] add encryption
 - [ ] error correction (ECC) like reed-solomon
 
 
-DEV NOTES
+### DEV NOTES
 encode images to video with image convert to yuv422p10
+```
 ffmpeg -framerate 30 -i out_%d.png -c:v prores -profile:v 3 -pix_fmt yuv422p10 output.mov
+```
 
 decode video to images
+```
 ffmpeg -i tmp/out/output.mov tmp/out/decompressed/output_%08d.png
+```
+
+### Inspiration
+
+Harder Drive: Hard drives we didn't want or need
+https://www.youtube.com/watch?v=JcJSW7Rprio
+
+Infinite Storage Glitch (rust)
+https://github.com/DvorakDwarf/Infinite-Storage-Glitch
+
+
