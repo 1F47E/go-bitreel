@@ -23,6 +23,8 @@ func init() {
 	app.HideVersion = false
 	app.Version = version
 	app.ArgsUsage = ""
+	app.EnableBashCompletion = true
+  app.
 	app.Commands = []cli.Command{
 		{
 			Name:    "encode",
