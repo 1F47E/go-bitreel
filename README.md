@@ -19,6 +19,11 @@ Due to this process, the resulting video will be approximately 4 times the size 
 A checksum for each frame is calculated and incorporated as metadata, ensuring the integrity of your data.<br>
 The final step involves encoding these frames into a video using ffmpeg.<br>
 
+<div align="center">
+<br>
+<a href="https://github.com/kaspar1ndustries/go-bytereel/blob/dev/docs/out.png?raw=true" target="_blank"><img src="https://github.com/kaspar1ndustries/go-bytereel/blob/dev/docs/out_cut.png?raw=true" width="300"></a>
+</div>
+
 
 ### Dependencies
 
