@@ -12,12 +12,16 @@ import (
 var app = cli.NewApp()
 var log = logger.Log
 
+// global vars to be filled via build args and later used in api
+var version string
+
 func init() {
 	app.Name = "bytereel"
 	app.Usage = "A file to video converter"
 	app.UsageText = "bytereel [command] filename"
 	app.HideHelp = true
-	app.HideVersion = true
+	app.HideVersion = false
+	app.Version = version
 	app.ArgsUsage = ""
 	app.Commands = []cli.Command{
 		{
