@@ -83,7 +83,6 @@ func Encode(path string) error {
 		frameCnt++
 	}
 
-	// no more jobs to send, closing the channel
 	// expected all the workers to finish and exit
 	close(jobs)
 

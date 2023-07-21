@@ -38,8 +38,10 @@ func encodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
 	writeIdx := 0
 	var col color.Color
 	img := image.NewNRGBA(image.Rect(0, 0, cfg.FrameWidth, cfg.FrameHeight))
-	for x := 0; x < img.Bounds().Dx(); x += 2 {
-		for y := 0; y < img.Bounds().Dy(); y += 2 {
+	// width := img.Bounds().Dx()
+	// height := img.Bounds().Dy()
+	for x := 0; x < cfg.FrameWidth; x += 2 {
+		for y := 0; y < cfg.FrameHeight; y += 2 {
 			// detect file end
 			if writeIdx <= bitIndex {
 				if bufferBits[writeIdx] {
@@ -75,8 +77,8 @@ func decodeFrame(filename string) ([]byte, int) {
 	var cntBlack, cntWhite, cntRed uint
 	var pixelErrorsCount int
 	var fileBits [cfg.SizeFrame * 8]bool
-	for x := 0; x < img.Bounds().Dx(); x += 2 {
-		for y := 0; y < img.Bounds().Dy(); y += 2 {
+	for x := 0; x < cfg.FrameWidth; x += 2 {
+		for y := 0; y < cfg.FrameHeight; y += 2 {
 			// error detection
 			// count black and white pixels in a 2x2 square
 			for i := 0; i < 2; i++ {
