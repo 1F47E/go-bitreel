@@ -3,17 +3,16 @@ package core
 import (
 	cfg "bytereel/pkg/config"
 	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/fs"
 	"bytereel/pkg/job"
 	"bytereel/pkg/meta"
+	"bytereel/pkg/storage"
 	"bytereel/pkg/video"
-	"bytereel/pkg/workers"
 	"os"
 	"runtime"
 	"time"
 )
 
-func Decode(videoFile string) (string, error) {
+func (c *Core) Decode(videoFile string) (string, error) {
 	var err error
 	var out string
 	var bytesWritten int
@@ -23,7 +22,7 @@ func Decode(videoFile string) (string, error) {
 	p.ProgressSpinner("Decoding video... ")
 
 	// create dir to store frames
-	framesDir, err := fs.CreateFramesDir()
+	framesDir, err := storage.CreateFramesDir()
 	if err != nil {
 		log.Fatal("Error creating frames dir:", err)
 	}
@@ -46,7 +45,7 @@ func Decode(videoFile string) (string, error) {
 	close(done)
 
 	// ===== DECODING FRAMES
-	filesList, err := fs.ScanFrames()
+	filesList, err := storage.ScanFrames()
 	if err != nil {
 		log.Fatal("Error scanning frames dir:", err)
 	}
@@ -67,7 +66,7 @@ func Decode(videoFile string) (string, error) {
 	log.Debugf("Starting %d workers", numCpu)
 	for i := 0; i <= numCpu; i++ {
 		i := i
-		go workers.WorkerDecode(i+1, framesCh, resChs)
+		go c.worker.WorkerDecode(i+1, framesCh, resChs)
 	}
 
 	// send all the jobs, in batches of G cnt
@@ -80,7 +79,7 @@ func Decode(videoFile string) (string, error) {
 
 	// Create a temporary file in the same directory
 	log.Debug("Reading res channels, writing to file")
-	tmpFile, err := fs.CreateTempFile()
+	tmpFile, err := storage.CreateTempFile()
 	if err != nil {
 		log.Fatal("Cannot create temp file:", err)
 	}
@@ -120,7 +119,7 @@ func Decode(videoFile string) (string, error) {
 		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
-	err = fs.SaveDecoded(tmpFile, out)
+	err = storage.SaveDecoded(tmpFile, out)
 	if err != nil {
 		log.Fatal("Cannot save decoded file:", err)
 	}

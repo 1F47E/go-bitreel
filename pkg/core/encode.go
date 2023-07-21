@@ -4,10 +4,8 @@ import (
 	cfg "bytereel/pkg/config"
 	p "bytereel/pkg/core/progress"
 	"bytereel/pkg/job"
-	"bytereel/pkg/logger"
 	"bytereel/pkg/meta"
 	"bytereel/pkg/video"
-	"bytereel/pkg/workers"
 	"fmt"
 	"io"
 	"os"
@@ -16,9 +14,7 @@ import (
 	"time"
 )
 
-var log = logger.Log
-
-func Encode(path string) error {
+func (c *Core) Encode(path string) error {
 	// open a file
 	file, err := os.Open(path)
 	if err != nil {
@@ -52,7 +48,7 @@ func Encode(path string) error {
 		wg.Add(1)
 		i := i
 		go func() {
-			workers.WorkerEncode(i, jobs)
+			c.worker.WorkerEncode(i, jobs)
 			wg.Done()
 		}()
 	}

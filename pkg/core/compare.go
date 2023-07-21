@@ -7,14 +7,14 @@ import (
 )
 
 // encode + decode + compare
-func Compare(filename string) (bool, error) {
+func (c *Core) Compare(filename string) (bool, error) {
 	defer os.Remove(cfg.PathVideoOut)
 
-	err := Encode(filename)
+	err := c.Encode(filename)
 	if err != nil {
 		return false, err
 	}
-	out, err := Decode(cfg.PathVideoOut)
+	out, err := c.Decode(cfg.PathVideoOut)
 	if err != nil {
 		return false, err
 	}

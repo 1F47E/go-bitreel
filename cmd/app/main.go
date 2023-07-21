@@ -19,6 +19,7 @@ var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
 var version string
 
 func init() {
+	cr := core.NewCore()
 	app.Name = "bytereel"
 	app.Usage = "A file to video converter"
 	app.UsageText = "bytereel [command] filename"
@@ -37,7 +38,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				return core.Encode(filename)
+				return cr.Encode(filename)
 			},
 		},
 		{
@@ -49,7 +50,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				_, err = core.Decode(filename)
+				_, err = cr.Decode(filename)
 				return err
 			},
 		},
@@ -62,7 +63,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				same, err := core.Compare(filename)
+				same, err := cr.Compare(filename)
 				if err != nil {
 					return fmt.Errorf("Error comparing video: %v", err)
 				}

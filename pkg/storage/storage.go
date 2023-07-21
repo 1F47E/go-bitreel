@@ -1,5 +1,5 @@
 // All files related functions
-package fs
+package storage
 
 import (
 	cfg "bytereel/pkg/config"

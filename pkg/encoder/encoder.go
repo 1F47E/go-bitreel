@@ -2,9 +2,9 @@ package encoder
 
 import (
 	// cfg "bytereel/pkg/config"
-	"bytereel/pkg/fs"
 	"bytereel/pkg/logger"
 	"bytereel/pkg/meta"
+	"bytereel/pkg/storage"
 	"image"
 	"image/color"
 )
@@ -81,7 +81,7 @@ func (f *FrameEncoder) EncodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
 }
 
 func (f *FrameEncoder) DecodeFrame(filename string) ([]byte, int) {
-	img, err := fs.FrameRead(filename)
+	img, err := storage.FrameRead(filename)
 	if err != nil {
 		log.Fatal("Cannot decode file:", err)
 	}
