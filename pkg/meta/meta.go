@@ -37,7 +37,7 @@ func Parse(header []byte) (Metadata, error) {
 	timestamp := int64(binary.BigEndian.Uint64(timestampBytes))
 
 	filenameBytes := header[16:]
-	// fine end of the filename by marker
+	// find end of the filename by marker
 	end := strings.Index(string(filenameBytes), cfg.MetadataEOFMarker)
 	filename := string(filenameBytes[:end])
 
@@ -109,6 +109,13 @@ func (m *Metadata) Hash(bytes []byte) []bool {
 	return bytesToBits(header)
 }
 
+// get datetime in users format
+func (m *Metadata) GetDatetime() string {
+	t := time.Unix(m.timestamp, 0)
+	localTime := t.Local()
+	return localTime.Format(time.RFC822)
+}
+
 func generateChecksum(bytes *[]byte) uint64 {
 	hasher := fnv.New64a()
 	_, err := hasher.Write(*bytes)
@@ -134,16 +141,6 @@ func encodeFilename(path string) string {
 	// add marker to the end of the filename so on decoding we know the end
 	filename += cfg.MetadataEOFMarker
 	return filename
-	// return bytesToBits([]byte(filename))
-	// fmt.Println("filename", filename)
-	// printBits(filenameBits)
-}
-
-// get datetime in users format
-func (m *Metadata) GetDatetime() string {
-	t := time.Unix(m.timestamp, 0)
-	localTime := t.Local()
-	return localTime.Format(time.RFC822)
 }
 
 func bytesToBits(bytes []byte) []bool {

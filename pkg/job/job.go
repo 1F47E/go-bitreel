@@ -36,9 +36,6 @@ func (j *JobEnc) Print() string {
 }
 
 func (j *JobEnc) Update(buf []byte, bufLen int, frameNum int) {
-	// copy buffer to avoid overwriting of the same buffer
-	cp := make([]byte, bufLen)
-	_ = copy(cp, buf[:bufLen])
-	j.Buffer = cp
+	j.Buffer = append([]byte{}, buf[:bufLen]...)
 	j.FrameNum = frameNum
 }

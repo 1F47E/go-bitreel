@@ -5,6 +5,7 @@ import (
 	p "bytereel/pkg/core/progress"
 	"bytereel/pkg/encoder"
 	"bytereel/pkg/job"
+	"bytereel/pkg/logger"
 	"bytereel/pkg/meta"
 	"bytereel/pkg/video"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"time"
 )
+
+var log = logger.Log
 
 func Encode(path string) error {
 	// open a file

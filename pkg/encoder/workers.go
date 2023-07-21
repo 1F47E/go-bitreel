@@ -4,9 +4,12 @@ import (
 	cfg "bytereel/pkg/config"
 	"bytereel/pkg/fs"
 	"bytereel/pkg/job"
+	"bytereel/pkg/logger"
 	"bytereel/pkg/meta"
 	"time"
 )
+
+var log = logger.Log
 
 func WorkerEncode(g int, jobs <-chan job.JobEnc) {
 	log.Debugf("Goroutine %d started\n", g)
