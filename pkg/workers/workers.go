@@ -1,7 +1,8 @@
-package encoder
+package workers
 
 import (
 	cfg "bytereel/pkg/config"
+	"bytereel/pkg/encoder"
 	"bytereel/pkg/fs"
 	"bytereel/pkg/job"
 	"bytereel/pkg/logger"
@@ -26,7 +27,8 @@ func WorkerEncode(g int, jobs <-chan job.JobEnc) {
 		// Encoding bits to image - around 1.5s
 		now := time.Now()
 		log.Debugf("G #%d Frame start: %d\n", g, j.FrameNum)
-		img := encodeFrame(j.Buffer, j.Metadata)
+		enc := encoder.NewFrameEncoder(cfg.SizeFrameWidth, cfg.SizeFrameHeight)
+		img := enc.EncodeFrame(j.Buffer, j.Metadata)
 		log.Debugf("G #%d Frame done. Took time: %s\n", g, time.Since(now))
 
 		// Saving image to file - around 7s
@@ -52,7 +54,8 @@ func WorkerDecode(id int, fCh <-chan job.JobDec, resChs []chan job.JobDecRes) {
 		log.Debugf("G %d got %d-%s\n", id, frame.Idx, file)
 
 		// decode frame file into bytes
-		frameBytes, fileBytesCnt := decodeFrame(file)
+		enc := encoder.NewFrameEncoder(cfg.SizeFrameWidth, cfg.SizeFrameHeight)
+		frameBytes, fileBytesCnt := enc.DecodeFrame(file)
 		log.Debugf("G %d decoded %s\n", id, file)
 
 		// split frameBytes to header and data

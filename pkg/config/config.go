@@ -20,7 +20,8 @@ const (
 
 	// 250kb on 4k
 	// on 4k 3840*2160/4/8 = 259200 bytes = about 250kb
-	SizeFrame = SizeFrameWidth * SizeFrameHeight / SizePixel / 8
+	SizeFrameBits = SizeFrameWidth * SizeFrameHeight / SizePixel
+	SizeFrame     = SizeFrameBits / 8
 
 	// Path
 	PathFramesDir = "tmp/frames"

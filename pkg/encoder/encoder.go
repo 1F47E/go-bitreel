@@ -1,18 +1,35 @@
 package encoder
 
 import (
-	cfg "bytereel/pkg/config"
+	// cfg "bytereel/pkg/config"
 	"bytereel/pkg/fs"
+	"bytereel/pkg/logger"
 	"bytereel/pkg/meta"
 	"image"
 	"image/color"
 )
 
-func encodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
+var log = logger.Log
+
+const pixelSize = 4
+
+type FrameEncoder struct {
+	width    int
+	height   int
+	sizeBits int
+}
+
+func NewFrameEncoder(width, height int) *FrameEncoder {
+	// calc frame size in bits based on our pixel size
+	sizeBits := width * height / pixelSize
+	return &FrameEncoder{width, height, sizeBits}
+}
+
+func (f *FrameEncoder) EncodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
 	log.Debug("Encoding frame")
 
 	// craete buffer, get and copy metadata - filename, timestamp and checksum
-	bufferBits := make([]bool, cfg.SizeFrame*8)
+	bufferBits := make([]bool, f.sizeBits)
 	metadataBits := m.Hash(data)
 	copy(bufferBits, metadataBits)
 
@@ -37,11 +54,9 @@ func encodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
 	// generate image
 	writeIdx := 0
 	var col color.Color
-	img := image.NewNRGBA(image.Rect(0, 0, cfg.FrameWidth, cfg.FrameHeight))
-	// width := img.Bounds().Dx()
-	// height := img.Bounds().Dy()
-	for x := 0; x < cfg.FrameWidth; x += 2 {
-		for y := 0; y < cfg.FrameHeight; y += 2 {
+	img := image.NewNRGBA(image.Rect(0, 0, f.width, f.height))
+	for x := 0; x < f.width; x += 2 {
+		for y := 0; y < f.height; y += 2 {
 			// detect file end
 			if writeIdx <= bitIndex {
 				if bufferBits[writeIdx] {
@@ -65,7 +80,7 @@ func encodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
 	return img
 }
 
-func decodeFrame(filename string) ([]byte, int) {
+func (f *FrameEncoder) DecodeFrame(filename string) ([]byte, int) {
 	img, err := fs.FrameRead(filename)
 	if err != nil {
 		log.Fatal("Cannot decode file:", err)
@@ -76,9 +91,10 @@ func decodeFrame(filename string) ([]byte, int) {
 	var writeIdx int
 	var cntBlack, cntWhite, cntRed uint
 	var pixelErrorsCount int
-	var fileBits [cfg.SizeFrame * 8]bool
-	for x := 0; x < cfg.FrameWidth; x += 2 {
-		for y := 0; y < cfg.FrameHeight; y += 2 {
+	// var fileBits [cfg.sizeBits]bool
+	fileBits := make([]bool, f.sizeBits)
+	for x := 0; x < f.width; x += 2 {
+		for y := 0; y < f.height; y += 2 {
 			// error detection
 			// count black and white pixels in a 2x2 square
 			for i := 0; i < 2; i++ {

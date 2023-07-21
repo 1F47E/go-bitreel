@@ -3,11 +3,11 @@ package core
 import (
 	cfg "bytereel/pkg/config"
 	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/encoder"
 	"bytereel/pkg/fs"
 	"bytereel/pkg/job"
 	"bytereel/pkg/meta"
 	"bytereel/pkg/video"
+	"bytereel/pkg/workers"
 	"os"
 	"runtime"
 	"time"
@@ -67,7 +67,7 @@ func Decode(videoFile string) (string, error) {
 	log.Debugf("Starting %d workers", numCpu)
 	for i := 0; i <= numCpu; i++ {
 		i := i
-		go encoder.WorkerDecode(i+1, framesCh, resChs)
+		go workers.WorkerDecode(i+1, framesCh, resChs)
 	}
 
 	// send all the jobs, in batches of G cnt

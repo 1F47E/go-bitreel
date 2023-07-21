@@ -3,11 +3,11 @@ package core
 import (
 	cfg "bytereel/pkg/config"
 	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/encoder"
 	"bytereel/pkg/job"
 	"bytereel/pkg/logger"
 	"bytereel/pkg/meta"
 	"bytereel/pkg/video"
+	"bytereel/pkg/workers"
 	"fmt"
 	"io"
 	"os"
@@ -52,7 +52,7 @@ func Encode(path string) error {
 		wg.Add(1)
 		i := i
 		go func() {
-			encoder.WorkerEncode(i, jobs)
+			workers.WorkerEncode(i, jobs)
 			wg.Done()
 		}()
 	}
