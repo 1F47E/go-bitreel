@@ -7,18 +7,73 @@ import (
 	"bytereel/pkg/meta"
 	"bytereel/pkg/storage"
 	"bytereel/pkg/video"
+	"context"
 	"os"
 	"runtime"
 	"time"
 )
 
+// 1. extract frames from video
+// 2. decode frames into bytes by workers, send results to separage channel in resChs
+// 3. write to result file continuously. Read from resChs in order from every worker
 func (c *Core) Decode(videoFile string) (string, error) {
 	var err error
-	var out string
-	var bytesWritten int
-	var metadata meta.Metadata
 
-	// ===== VIDEO DECODING
+	// extract frames from video
+	err = framesExtract(c.ctx, videoFile)
+	if err != nil {
+		return "", err
+	}
+
+	// scan dir for frames
+	filesList, err := storage.ScanFrames()
+	if err != nil {
+		return "", err
+	}
+	log.Debugf("total frames: %d", len(filesList))
+
+	p.ProgressReset(len(filesList), "Decoding frames... ")
+
+	resChs := make([]chan job.JobDecRes, len(filesList))
+	for i := 0; i < len(filesList); i++ {
+		resChs[i] = make(chan job.JobDecRes, 1)
+	}
+
+	// create channels and start the workers
+	cores := runtime.NumCPU()
+	framesCh := make(chan job.JobDec, cores) // buff by G count
+	log.Debugf("Starting %d workers", cores)
+	for i := 0; i <= cores; i++ {
+		i := i
+		go c.worker.WorkerDecode(i+1, framesCh, resChs)
+	}
+
+	// send all the jobs
+	go func() {
+		for i, file := range filesList {
+			framesCh <- job.JobDec{File: file, Idx: i}
+			log.Debugf("Sent file %d/%d", i+1, len(filesList))
+		}
+	}()
+
+	// read the frames channel and write results to a file
+	out, err := framesWrite(c.ctx, resChs)
+	if err != nil {
+		return "", err
+	}
+
+	// cleanup
+	log.Debug("Closing res channels")
+	for _, ch := range resChs {
+		close(ch)
+	}
+	log.Debug("Closing frames channel")
+	close(framesCh)
+
+	return out, nil
+}
+
+func framesExtract(ctx context.Context, videoFile string) error {
 	p.ProgressSpinner("Decoding video... ")
 
 	// create dir to store frames
@@ -35,7 +90,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// updates progress bar in a loop
 	go scanFramesDir(framesDir, videoFile, done)
 
-	err = video.ExtractFrames(c.ctx, videoFile, framesDir)
+	err = video.ExtractFrames(ctx, videoFile, framesDir)
 	if err != nil {
 		log.Fatalf("Extracting frames error: \n\n%s", err)
 	}
@@ -43,40 +98,13 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// stop the progress reporter and dir scanner
 	p.Finish()
 	close(done)
+	return nil
+}
 
-	// ===== DECODING FRAMES
-	filesList, err := storage.ScanFrames()
-	if err != nil {
-		log.Fatal("Error scanning frames dir:", err)
-	}
-	log.Debugf("total frames: %d", len(filesList))
-
-	p.ProgressReset(len(filesList), "Decoding frames... ")
-
-	// start the workers
-	numCpu := runtime.NumCPU()
-	framesCh := make(chan job.JobDec, numCpu) // buff by G count
-	resChs := make([]chan job.JobDecRes, len(filesList))
-
-	// create res channels
-	for i := 0; i < len(filesList); i++ {
-		resChs[i] = make(chan job.JobDecRes, 1)
-	}
-
-	log.Debugf("Starting %d workers", numCpu)
-	for i := 0; i <= numCpu; i++ {
-		i := i
-		go c.worker.WorkerDecode(i+1, framesCh, resChs)
-	}
-
-	// send all the jobs, in batches of G cnt
-	go func() {
-		for i, file := range filesList {
-			framesCh <- job.JobDec{File: file, Idx: i}
-			log.Debugf("Sent file %d/%d", i+1, len(filesList))
-		}
-	}()
-
+func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, error) {
+	var out string
+	var bytesWritten int
+	var metadata meta.Metadata
 	// Create a temporary file in the same directory
 	log.Debug("Reading res channels, writing to file")
 	tmpFile, err := storage.CreateTempFile()
@@ -90,9 +118,9 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	loop:
 		for {
 			select {
-			case <-c.ctx.Done():
+			case <-ctx.Done():
 				log.Debug("Decoder exit")
-				return "", c.ctx.Err()
+				return out, ctx.Err()
 			case fr := <-ch:
 				log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
 
@@ -115,12 +143,6 @@ func (c *Core) Decode(videoFile string) (string, error) {
 			}
 		}
 	}
-	log.Debug("Closing res channels")
-	for _, ch := range resChs {
-		close(ch)
-	}
-	log.Debug("Closing frames channel")
-	close(framesCh)
 
 	// check metadata
 	if metadata.IsOk() {
