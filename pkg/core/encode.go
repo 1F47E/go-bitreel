@@ -88,7 +88,6 @@ loop:
 	}
 
 	// expected all the workers to finish and exit
-
 	close(jobs)
 
 	// wait for all the files to be processed
@@ -100,7 +99,7 @@ loop:
 	// setup progress bar async, otherwise it wont animate
 	p.ProgressSpinner("Saving video... ")
 	done := make(chan bool)
-	go func(done <-chan bool) {
+	go func() {
 		ticker := time.NewTicker(time.Millisecond * 300)
 		for {
 			select {
@@ -110,14 +109,14 @@ loop:
 				return
 			}
 		}
-	}(done)
+	}()
 
 	// Call ffmpeg to decode the video into frames
 	err = video.EncodeFrames(c.ctx)
 	if err != nil {
 		log.Fatal("Error encoding frames into video:", err)
 	}
-	done <- true
+	close(done)
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")

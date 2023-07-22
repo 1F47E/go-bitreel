@@ -30,6 +30,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// start frames progress reporter
 	p.ProgressReset(0, "Extracting frames... ")
 	done := make(chan bool)
+
 	// fill scan frames folder untill video finishes extracting
 	// updates progress bar in a loop
 	go scanFramesDir(framesDir, videoFile, done)
@@ -39,9 +40,8 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		log.Fatalf("Extracting frames error: \n\n%s", err)
 	}
 
-	// stop the progress reporter
+	// stop the progress reporter and dir scanner
 	p.Finish()
-
 	close(done)
 
 	// ===== DECODING FRAMES
@@ -154,6 +154,7 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 
 	ticker := time.NewTicker(time.Second / 10)
 	defer ticker.Stop()
+
 	// update progress with estimated num of frames
 	p.Max(totalFramesCount)
 

@@ -36,25 +36,6 @@ brew install bytereel
 ```
 
 
-### TODO
-
-- [x] encode file to frames
-- [x] decode file from frames
-- [x] save original filename
-- [x] add metadata to every frame at the top
-- [x] add checksum to frames at the end
-- [x] detect end of the file
-- [x] add bit rot protection - counting dominant pixels in a square
-- [x] run ffmpeg from the code
-- [x] generate video
-- [x] decode video
-- [x] check checksum on decode
-- [x] add workers, limit to cpu cores
-- [ ] release tap on homebrew
-- [ ] add encryption
-- [ ] error correction (ECC) like reed-solomon
-
-
 ### DEV NOTES
 encode images to video with image convert to yuv422p10
 ```
