@@ -56,30 +56,39 @@ func (c *Core) Encode(path string) error {
 	// init metadata with filename and timestamp
 	md := meta.New(path)
 	frameCnt := 1
+
 	// job object will be updated with copy of the buffer and send to the channel
 	j := job.New(md, frameCnt)
+
 	// read file into the buffer by chunks
+loop:
 	for {
-		n, err := file.Read(readBuffer)
-		if err != nil {
-			if err == io.EOF {
-				log.Debug("EOF")
-				break
+		select {
+		case <-c.ctx.Done():
+			return c.ctx.Err()
+		default:
+			n, err := file.Read(readBuffer)
+			if err != nil {
+				if err == io.EOF {
+					log.Debug("EOF")
+					break loop
+				}
+				log.Println("Error reading file:", err)
+				return err
 			}
-			log.Println("Error reading file:", err)
-			return err
+			// copy the buffer to the job
+			j.Update(readBuffer, n, frameCnt)
+			log.Debugf("Sending job for frame %d: %s\n", frameCnt, j.Print())
+			// this will block untill available worker pick it up
+			log.Debug(j.Print())
+			jobs <- j
+			p.Add(1) // progress bar
+			frameCnt++
 		}
-		// copy the buffer explicitly
-		j.Update(readBuffer, n, frameCnt)
-		log.Debugf("Sending job for frame %d: %s\n", frameCnt, j.Print())
-		// this will block untill available worker pick it up
-		log.Debug(j.Print())
-		jobs <- j
-		p.Add(1)
-		frameCnt++
 	}
 
 	// expected all the workers to finish and exit
+
 	close(jobs)
 
 	// wait for all the files to be processed
@@ -104,7 +113,7 @@ func (c *Core) Encode(path string) error {
 	}(done)
 
 	// Call ffmpeg to decode the video into frames
-	err = video.EncodeFrames()
+	err = video.EncodeFrames(c.ctx)
 	if err != nil {
 		log.Fatal("Error encoding frames into video:", err)
 	}

@@ -34,7 +34,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	// updates progress bar in a loop
 	go scanFramesDir(framesDir, videoFile, done)
 
-	err = video.ExtractFrames(videoFile, framesDir)
+	err = video.ExtractFrames(c.ctx, videoFile, framesDir)
 	if err != nil {
 		log.Fatalf("Extracting frames error: \n\n%s", err)
 	}
@@ -83,26 +83,37 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	if err != nil {
 		log.Fatal("Cannot create temp file:", err)
 	}
+
+	// ranging over channels because work should be done in order
 	// write results to file, blocking, in order
 	for i, ch := range resChs {
-		log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
-		fr := <-ch
+	loop:
+		for {
+			select {
+			case <-c.ctx.Done():
+				log.Debug("Decoder exit")
+				return "", c.ctx.Err()
+			case fr := <-ch:
+				log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
 
-		// set metadata if not set already
-		// it may be lost in some frames, check untill found
-		if fr.Meta.IsOk() && !metadata.IsOk() {
-			metadata = fr.Meta
-			log.Println()
-			log.Warnf("Metadata found: %s", metadata.Print())
-		}
+				// set metadata if not set already
+				// it may be lost in some frames, check untill found
+				if fr.Meta.IsOk() && !metadata.IsOk() {
+					metadata = fr.Meta
+					log.Println()
+					log.Warnf("Metadata found: %s", metadata.Print())
+				}
 
-		log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.Data))
-		written, err := tmpFile.Write(fr.Data)
-		if err != nil {
-			log.Fatal("Cannot write to file:", err)
+				log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.Data))
+				written, err := tmpFile.Write(fr.Data)
+				if err != nil {
+					log.Fatal("Cannot write to file:", err)
+				}
+				bytesWritten += written
+				p.Add(1)
+				break loop
+			}
 		}
-		bytesWritten += written
-		p.Add(1)
 	}
 	log.Debug("Closing res channels")
 	for _, ch := range resChs {
