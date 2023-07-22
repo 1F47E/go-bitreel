@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// 1. read file into buffer by chunks
+// 2. encode chunks to images and write to files as png frames
+// 3. encode frames into video
 func (c *Core) Encode(path string) error {
 	// open a file
 	file, err := os.Open(path)
@@ -111,7 +114,7 @@ loop:
 		}
 	}()
 
-	// Call ffmpeg to decode the video into frames
+	// Call ffmpeg to encode frames into video
 	err = video.EncodeFrames(c.ctx)
 	if err != nil {
 		log.Fatal("Error encoding frames into video:", err)
