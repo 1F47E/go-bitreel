@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"time"
@@ -9,6 +10,7 @@ import (
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
 	p "github.com/1F47E/go-bytereel/pkg/core/progress"
 	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 	"github.com/1F47E/go-bytereel/pkg/meta"
 	"github.com/1F47E/go-bytereel/pkg/storage"
 	"github.com/1F47E/go-bytereel/pkg/video"
@@ -18,6 +20,7 @@ import (
 // 2. decode frames into bytes by workers, send results to separage channel in resChs
 // 3. write to result file continuously. Read from resChs in order from every worker
 func (c *Core) Decode(videoFile string) (string, error) {
+	log := logger.Log.WithField("scope", "core decode")
 	var err error
 
 	// extract frames from video
@@ -80,7 +83,7 @@ func framesExtract(ctx context.Context, videoFile string) error {
 	// create dir to store frames
 	framesDir, err := storage.CreateFramesDir()
 	if err != nil {
-		log.Fatal("Error creating frames dir:", err)
+		return fmt.Errorf("Error creating frames dir: %w", err)
 	}
 
 	// start frames progress reporter
@@ -93,7 +96,7 @@ func framesExtract(ctx context.Context, videoFile string) error {
 
 	err = video.ExtractFrames(ctx, videoFile, framesDir)
 	if err != nil {
-		log.Fatalf("Extracting frames error: \n\n%s", err)
+		return fmt.Errorf("Error extracting frames: %w", err)
 	}
 
 	// stop the progress reporter and dir scanner
@@ -103,6 +106,7 @@ func framesExtract(ctx context.Context, videoFile string) error {
 }
 
 func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, error) {
+	log := logger.Log
 	var out string
 	var bytesWritten int
 	var metadata meta.Metadata
@@ -166,6 +170,7 @@ func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, erro
 // but the total size of all frames is about 3% less then a video (in a corrent compression case)
 // so we can use the video file size to estimate the total frames count
 func scanFramesDir(dir string, videoFile string, done <-chan bool) {
+	log := logger.Log.WithField("scope", "core scanFramesDir")
 	// get video file size
 	fileInfo, err := os.Stat(videoFile)
 	if err != nil {

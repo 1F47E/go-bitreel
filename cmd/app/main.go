@@ -21,19 +21,16 @@ import (
 	"github.com/urfave/cli"
 )
 
-var app = cli.NewApp()
-var log = logger.Log
-var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
-
-const banner = `
+const (
+	banner = `
 __________          __        __________              .__   
 \______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
  |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
  |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
  |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
         \/ \/                \/       \/     \/     \/
+
 `
-const (
 	Reset  = "\033[0m"
 	Red    = "\033[31m"
 	Green  = "\033[32m"
@@ -45,7 +42,10 @@ const (
 	White  = "\033[97m"
 )
 
-// to be filled via build args
+var app = cli.NewApp()
+var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
+
+// to be filled on build
 var version string
 
 func init() {
@@ -60,14 +60,13 @@ func init() {
 }
 
 func main() {
-	fmt.Println(Yellow, banner, Reset)
-	fmt.Println("Version:", version)
-	fmt.Println()
+	log := logger.Log
+	fmt.Println(Green, banner, Reset)
 
 	flag.Parse()
 	args := os.Args
 
-	// pprof profiling
+	// profiling
 	if *pprofFlag {
 		if len(args) < 2 {
 			log.Fatal("pprof filename is required")
@@ -84,7 +83,7 @@ func main() {
 		args = args[2:]
 	}
 
-	// Graceful shutdown
+	// graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		stop := make(chan os.Signal, 1)

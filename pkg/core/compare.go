@@ -35,7 +35,6 @@ func (c *Core) Compare(filename string) (bool, error) {
 
 // Compare files before and after decoding for test command
 func compareFiles(file1, file2 string) (bool, error) {
-	log.Info("Comparing files...")
 	// read files
 	b1, err := os.ReadFile(file1)
 	if err != nil {
@@ -47,13 +46,11 @@ func compareFiles(file1, file2 string) (bool, error) {
 	}
 	// compare
 	if len(b1) != len(b2) {
-		log.Fatal("Files are not the same size")
-		return false, nil
+		return false, fmt.Errorf("Files are not the same size")
 	}
 	for i := 0; i < len(b1); i++ {
 		if b1[i] != b2[i] {
-			log.Info("Files are not the same at position", i)
-			return false, nil
+			return false, fmt.Errorf("Files are not the same at position %d", i)
 		}
 	}
 	return true, nil

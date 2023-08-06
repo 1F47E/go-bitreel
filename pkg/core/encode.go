@@ -11,6 +11,7 @@ import (
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
 	p "github.com/1F47E/go-bytereel/pkg/core/progress"
 	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 	"github.com/1F47E/go-bytereel/pkg/meta"
 	"github.com/1F47E/go-bytereel/pkg/video"
 )
@@ -19,6 +20,7 @@ import (
 // 2. encode chunks to images and write to files as png frames
 // 3. encode frames into video
 func (c *Core) Encode(path string) error {
+	log := logger.Log.WithField("scope", "core encode")
 	// open a file
 	file, err := os.Open(path)
 	if err != nil {

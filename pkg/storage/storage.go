@@ -14,7 +14,7 @@ import (
 	"github.com/1F47E/go-bytereel/pkg/logger"
 )
 
-var log = logger.Log
+var log = logger.Log.WithField("scope", "storage")
 var framesDir = cfg.PathFramesDir
 
 func CreateFramesDir() (string, error) {

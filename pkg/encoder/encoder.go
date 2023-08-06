@@ -10,8 +10,6 @@ import (
 	"github.com/1F47E/go-bytereel/pkg/storage"
 )
 
-var log = logger.Log
-
 const pixelSize = 4
 
 type FrameEncoder struct {
@@ -27,11 +25,15 @@ func NewFrameEncoder(width, height int) *FrameEncoder {
 }
 
 func (f *FrameEncoder) EncodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
+	log := logger.Log.WithField("scope", "frame encoder")
 	log.Debug("Encoding frame")
 
 	// craete buffer, get and copy metadata - filename, timestamp and checksum
 	bufferBits := make([]bool, f.sizeBits)
-	metadataBits := m.Hash(data)
+	metadataBits, err := m.Hash(data)
+	if err != nil {
+		log.Fatal("Cannot hash metadata:", err)
+	}
 	copy(bufferBits, metadataBits)
 
 	// range over data bit by bit and encode every bit as a pixel
@@ -82,6 +84,7 @@ func (f *FrameEncoder) EncodeFrame(data []byte, m meta.Metadata) *image.NRGBA {
 }
 
 func (f *FrameEncoder) DecodeFrame(filename string) ([]byte, int) {
+	log := logger.Log.WithField("scope", "frame decoder")
 	img, err := storage.FrameRead(filename)
 	if err != nil {
 		log.Fatal("Cannot decode file:", err)

@@ -13,8 +13,6 @@ import (
 	"github.com/1F47E/go-bytereel/pkg/storage"
 )
 
-var log = logger.Log
-
 type Worker struct {
 	ctx        context.Context
 	encodingCh chan job.JobEnc
@@ -32,6 +30,7 @@ func NewWorker(ctx context.Context) *Worker {
 }
 
 func (w *Worker) WorkerEncode(i int, jobs <-chan job.JobEnc) {
+	log := logger.Log.WithField("scope", fmt.Sprintf("WorkerEncode #%d", i))
 	name := fmt.Sprintf("WorkerEncode #%d", i)
 	log.Debugf("%s started\n", name)
 	defer log.Debugf("%s finished\n", name)
@@ -66,9 +65,9 @@ func (w *Worker) WorkerEncode(i int, jobs <-chan job.JobEnc) {
 }
 
 func (w *Worker) WorkerDecode(id int, fCh <-chan job.JobDec, resChs []chan job.JobDecRes) {
-	name := fmt.Sprintf("WorkerDecode #%d", id)
-	log.Debugf("%s started\n", name)
-	defer log.Debugf("%s finished\n", name)
+	log := logger.Log.WithField("scope", fmt.Sprintf("WorkerDecode #%d", id))
+	log.Debug("started")
+	defer log.Debug("finished")
 	for {
 		select {
 		case <-w.ctx.Done():
@@ -78,34 +77,37 @@ func (w *Worker) WorkerDecode(id int, fCh <-chan job.JobDec, resChs []chan job.J
 				return
 			}
 			file := frame.File
-			log.Debugf("%s got %d-%s\n", name, frame.Idx, file)
+			log.Debugf(" got %d-%s\n", frame.Idx, file)
 
 			// decode frame file into bytes
 			frameBytes, fileBytesCnt := w.encoder.DecodeFrame(file)
-			log.Debugf("%s decoded %s\n", name, file)
+			log.Debugf("decoded %s\n", file)
 
 			// split frameBytes to header and data
 			fileBytesCnt -= cfg.SizeMetadata
 			header := frameBytes[:cfg.SizeMetadata]
 			m, err := meta.Parse(header)
 			if err != nil {
-				log.Warnf("\n%s !!! metadata broken in file %s: %s\n", name, file, err)
+				log.Warnf("\n!!! metadata broken in file %s: %s\n", file, err)
 			}
-			log.Debugf("%s parsed metadata in %s\n", name, file)
+			log.Debugf("parsed metadata in %s\n", file)
 			data := frameBytes[cfg.SizeMetadata : cfg.SizeMetadata+fileBytesCnt]
 
 			// validate checksum
-			isValid := m.Validate(data)
-			if !isValid {
-				log.Warnf("\n%s !!! frame checksum and metadata checksum mismatch in file %s\n", name, file)
+			isValid, err := m.Validate(data)
+			if err != nil {
+				log.Warnf("\n!!! checksum validation failed in file %s: %s\n", file, err)
 			}
-			log.Debugf("%s validated %s\n", name, file)
+			if !isValid {
+				log.Warnf("\n!!! frame checksum and metadata checksum mismatch in file %s\n", file)
+			}
+			log.Debugf("validated %s\n", file)
 			resChs[frame.Idx] <- job.JobDecRes{
 				Data: data,
 				Meta: m,
 			}
 
-			log.Debugf("%s sent res %s\n", name, file)
+			log.Debugf("sent res %s\n", file)
 		}
 	}
 }

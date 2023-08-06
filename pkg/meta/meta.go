@@ -12,8 +12,6 @@ import (
 	"github.com/1F47E/go-bytereel/pkg/logger"
 )
 
-var log = logger.Log
-
 type Metadata struct {
 	Filename  string
 	timestamp int64
@@ -29,6 +27,7 @@ func New(path string) Metadata {
 
 // METADATA parsing
 func Parse(header []byte) (Metadata, error) {
+	log := logger.Log.WithField("scope", "meta parser")
 	log.Debug("Parsing metadata")
 	log.Debug("Header len: ", len(header))
 	log.Debugf("Header: %v\n", header)
@@ -65,7 +64,6 @@ func (m *Metadata) Print() string {
 func (m *Metadata) FormatDatetime() string {
 	t := time.Unix(m.timestamp, 0)
 	localTime := t.Local()
-	log.Debug("Local time: ", localTime)
 	return localTime.Format(time.RFC822)
 }
 
@@ -74,15 +72,23 @@ func (m *Metadata) Checksum() uint64 {
 }
 
 // validate
-func (m *Metadata) Validate(buff []byte) bool {
-	checksum := generateChecksum(&buff)
-	return checksum == m.checksum
+func (m *Metadata) Validate(buff []byte) (bool, error) {
+	checksum, err := generateChecksum(&buff)
+	if err != nil {
+		return false, err
+	}
+	return checksum == m.checksum, nil
 }
 
-func (m *Metadata) Hash(bytes []byte) []bool {
+func (m *Metadata) Hash(bytes []byte) ([]bool, error) {
+	log := logger.Log.WithField("scope", "meta hasher")
 
 	header := make([]byte, cfg.SizeMetadata)
-	checksum := generateChecksum(&bytes)
+	checksum, err := generateChecksum(&bytes)
+	if err != nil {
+		return nil, err
+	}
+
 	checksumBytes := convertUint64ToBytes(checksum)
 
 	// copy checksum to header
@@ -107,7 +113,7 @@ func (m *Metadata) Hash(bytes []byte) []bool {
 	l = s + len(m.Filename)
 	copy(header[s:l], fnBytes[:])
 
-	return bytesToBits(header)
+	return bytesToBits(header), nil
 }
 
 // get datetime in users format
@@ -117,13 +123,13 @@ func (m *Metadata) GetDatetime() string {
 	return localTime.Format(time.RFC822)
 }
 
-func generateChecksum(bytes *[]byte) uint64 {
+func generateChecksum(bytes *[]byte) (uint64, error) {
 	hasher := fnv.New64a()
 	_, err := hasher.Write(*bytes)
 	if err != nil {
-		log.Fatal("META:Error writing to hasher")
+		return 0, fmt.Errorf("META:Error writing to hasher")
 	}
-	return hasher.Sum64()
+	return hasher.Sum64(), nil
 }
 
 func convertUint64ToBytes(num uint64) []byte {
