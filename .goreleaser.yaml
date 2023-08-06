@@ -58,11 +58,11 @@ brews:
   - name: bytereel
     # ids:
     #   - bytereel
-    url_template: "https://github.com/kaspar1ndustries/go-bytereel/releases/download/{{ .Tag }}/{{ .Binary }}_{{ title .Os }}_{{ .Arch }}.tar.gz"
-    homepage: "https://github.com/kaspar1ndustries/go-bytereel"
+    url_template: "https://github.com/1F47E/go-bytereel/releases/download/{{ .Tag }}/{{ .Binary }}_{{ title .Os }}_{{ .Arch }}.tar.gz"
+    homepage: "https://github.com/1F47E/go-bytereel"
     description: "ByteReel converts any file to a video"
     tap:
-      owner: kaspar1ndustries
+      owner: 1F47E
       name: homebrew-tap
     test: |
       system "#{bin}/bytereel", ""
