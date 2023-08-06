@@ -1,16 +1,17 @@
 package core
 
 import (
-	cfg "bytereel/pkg/config"
-	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/job"
-	"bytereel/pkg/meta"
-	"bytereel/pkg/storage"
-	"bytereel/pkg/video"
 	"context"
 	"os"
 	"runtime"
 	"time"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	p "github.com/1F47E/go-bytereel/pkg/core/progress"
+	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/storage"
+	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
 // 1. extract frames from video

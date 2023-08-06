@@ -1,8 +1,13 @@
+//   __________          __        __________              .__
+//   \______   \___.__._/  |_  ____\______   \ ____   ____ |  |
+//    |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |
+//    |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
+//    |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
+//           \/ \/                \/       \/     \/     \/
+
 package main
 
 import (
-	"bytereel/pkg/core"
-	"bytereel/pkg/logger"
 	"context"
 	"flag"
 	"fmt"
@@ -10,12 +15,35 @@ import (
 	"os/signal"
 	"runtime/pprof"
 
+	"github.com/1F47E/go-bytereel/pkg/core"
+	"github.com/1F47E/go-bytereel/pkg/logger"
+
 	"github.com/urfave/cli"
 )
 
 var app = cli.NewApp()
 var log = logger.Log
 var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
+
+const banner = `
+__________          __        __________              .__   
+\______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
+ |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
+ |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
+ |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
+        \/ \/                \/       \/     \/     \/
+`
+const (
+	Reset  = "\033[0m"
+	Red    = "\033[31m"
+	Green  = "\033[32m"
+	Yellow = "\033[33m"
+	Blue   = "\033[34m"
+	Purple = "\033[35m"
+	Cyan   = "\033[36m"
+	Gray   = "\033[37m"
+	White  = "\033[97m"
+)
 
 // to be filled via build args
 var version string
@@ -32,6 +60,10 @@ func init() {
 }
 
 func main() {
+	fmt.Println(Yellow, banner, Reset)
+	fmt.Println("Version:", version)
+	fmt.Println()
+
 	flag.Parse()
 	args := os.Args
 

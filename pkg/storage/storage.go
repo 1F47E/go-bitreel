@@ -2,8 +2,6 @@
 package storage
 
 import (
-	cfg "bytereel/pkg/config"
-	"bytereel/pkg/logger"
 	"fmt"
 	"image"
 	"image/png"
@@ -11,6 +9,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 )
 
 var log = logger.Log

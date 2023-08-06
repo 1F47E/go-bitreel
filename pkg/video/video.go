@@ -1,12 +1,13 @@
 package video
 
 import (
-	cfg "bytereel/pkg/config"
-	"bytereel/pkg/logger"
 	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 )
 
 var log = logger.Log

@@ -1,8 +1,9 @@
 package job
 
 import (
-	"bytereel/pkg/meta"
 	"fmt"
+
+	"github.com/1F47E/go-bytereel/pkg/meta"
 )
 
 // job for the decoding worker

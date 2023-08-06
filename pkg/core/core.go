@@ -1,9 +1,10 @@
 package core
 
 import (
-	"bytereel/pkg/logger"
-	"bytereel/pkg/workers"
 	"context"
+
+	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/workers"
 )
 
 var log = logger.Log

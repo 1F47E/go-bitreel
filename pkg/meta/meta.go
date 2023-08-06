@@ -1,14 +1,15 @@
 package meta
 
 import (
-	cfg "bytereel/pkg/config"
-	"bytereel/pkg/logger"
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 	"path/filepath"
 	"strings"
 	"time"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 )
 
 var log = logger.Log

@@ -1,9 +1,10 @@
 package core
 
 import (
-	cfg "bytereel/pkg/config"
 	"fmt"
 	"os"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
 )
 
 // encode + decode + compare

@@ -1,12 +1,13 @@
 package encoder
 
 import (
-	// cfg "bytereel/pkg/config"
-	"bytereel/pkg/logger"
-	"bytereel/pkg/meta"
-	"bytereel/pkg/storage"
+	// cfg "github.com/1F47E/go-bytereel/pkg/config"
 	"image"
 	"image/color"
+
+	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/storage"
 )
 
 var log = logger.Log

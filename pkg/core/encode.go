@@ -1,17 +1,18 @@
 package core
 
 import (
-	cfg "bytereel/pkg/config"
-	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/job"
-	"bytereel/pkg/meta"
-	"bytereel/pkg/video"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"sync"
 	"time"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	p "github.com/1F47E/go-bytereel/pkg/core/progress"
+	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
 // 1. read file into buffer by chunks

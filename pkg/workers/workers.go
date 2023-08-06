@@ -1,15 +1,16 @@
 package workers
 
 import (
-	cfg "bytereel/pkg/config"
-	"bytereel/pkg/encoder"
-	"bytereel/pkg/job"
-	"bytereel/pkg/logger"
-	"bytereel/pkg/meta"
-	"bytereel/pkg/storage"
 	"context"
 	"fmt"
 	"time"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	"github.com/1F47E/go-bytereel/pkg/encoder"
+	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/storage"
 )
 
 var log = logger.Log
