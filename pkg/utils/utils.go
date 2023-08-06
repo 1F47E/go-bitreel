@@ -1,12 +1,12 @@
 package utils
 
 import (
-	"bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 )
 
 //nolint:unused
 func printBits(bits []bool) {
-	var log = logger.Log
+	log := logger.Log.WithField("scope", "utils")
 	for _, b := range bits {
 		if b {
 			log.Info("1")

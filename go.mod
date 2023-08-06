@@ -1,4 +1,4 @@
-module bytereel
+module github.com/1F47E/go-bytereel
 
 go 1.19
 

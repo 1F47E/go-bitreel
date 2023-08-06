@@ -1,21 +1,26 @@
 package core
 
 import (
-	cfg "bytereel/pkg/config"
-	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/encoder"
-	"bytereel/pkg/job"
-	"bytereel/pkg/meta"
-	"bytereel/pkg/video"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"sync"
 	"time"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	p "github.com/1F47E/go-bytereel/pkg/core/progress"
+	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
-func Encode(path string) error {
+// 1. read file into buffer by chunks
+// 2. encode chunks to images and write to files as png frames
+// 3. encode frames into video
+func (c *Core) Encode(path string) error {
+	log := logger.Log.WithField("scope", "core encode")
 	// open a file
 	file, err := os.Open(path)
 	if err != nil {
@@ -49,7 +54,7 @@ func Encode(path string) error {
 		wg.Add(1)
 		i := i
 		go func() {
-			encoder.WorkerEncode(i, jobs)
+			c.worker.WorkerEncode(i, jobs)
 			wg.Done()
 		}()
 	}
@@ -57,30 +62,37 @@ func Encode(path string) error {
 	// init metadata with filename and timestamp
 	md := meta.New(path)
 	frameCnt := 1
+
 	// job object will be updated with copy of the buffer and send to the channel
 	j := job.New(md, frameCnt)
+
 	// read file into the buffer by chunks
+loop:
 	for {
-		n, err := file.Read(readBuffer)
-		if err != nil {
-			if err == io.EOF {
-				log.Debug("EOF")
-				break
+		select {
+		case <-c.ctx.Done():
+			return c.ctx.Err()
+		default:
+			n, err := file.Read(readBuffer)
+			if err != nil {
+				if err == io.EOF {
+					log.Debug("EOF")
+					break loop
+				}
+				log.Println("Error reading file:", err)
+				return err
 			}
-			log.Println("Error reading file:", err)
-			return err
+			// copy the buffer to the job
+			j.Update(readBuffer, n, frameCnt)
+			log.Debugf("Sending job for frame %d: %s\n", frameCnt, j.Print())
+			// this will block untill available worker pick it up
+			log.Debug(j.Print())
+			jobs <- j
+			p.Add(1) // progress bar
+			frameCnt++
 		}
-		// copy the buffer explicitly
-		j.Update(readBuffer, n, frameCnt)
-		log.Debugf("Sending job for frame %d: %s\n", frameCnt, j.Print())
-		// this will block untill available worker pick it up
-		log.Debug(j.Print())
-		jobs <- j
-		p.Add(1)
-		frameCnt++
 	}
 
-	// no more jobs to send, closing the channel
 	// expected all the workers to finish and exit
 	close(jobs)
 
@@ -93,7 +105,7 @@ func Encode(path string) error {
 	// setup progress bar async, otherwise it wont animate
 	p.ProgressSpinner("Saving video... ")
 	done := make(chan bool)
-	go func(done <-chan bool) {
+	go func() {
 		ticker := time.NewTicker(time.Millisecond * 300)
 		for {
 			select {
@@ -103,14 +115,14 @@ func Encode(path string) error {
 				return
 			}
 		}
-	}(done)
+	}()
 
-	// Call ffmpeg to decode the video into frames
-	err = video.EncodeFrames()
+	// Call ffmpeg to encode frames into video
+	err = video.EncodeFrames(c.ctx)
 	if err != nil {
 		log.Fatal("Error encoding frames into video:", err)
 	}
-	done <- true
+	close(done)
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
