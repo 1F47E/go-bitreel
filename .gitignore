@@ -1,3 +1,6 @@
+main
+*.pprof
+pprof/*
 bytereel
 tmp/*
 bin/*

@@ -1,76 +1,58 @@
 package core
 
 import (
-	cfg "bytereel/pkg/config"
-	p "bytereel/pkg/core/progress"
-	"bytereel/pkg/encoder"
-	"bytereel/pkg/fs"
-	"bytereel/pkg/job"
-	"bytereel/pkg/meta"
-	"bytereel/pkg/video"
+	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"time"
+
+	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	p "github.com/1F47E/go-bytereel/pkg/core/progress"
+	"github.com/1F47E/go-bytereel/pkg/job"
+	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/storage"
+	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
-func Decode(videoFile string) (string, error) {
+// 1. extract frames from video
+// 2. decode frames into bytes by workers, send results to separage channel in resChs
+// 3. write to result file continuously. Read from resChs in order from every worker
+func (c *Core) Decode(videoFile string) (string, error) {
+	log := logger.Log.WithField("scope", "core decode")
 	var err error
-	var out string
-	var bytesWritten int
-	var metadata meta.Metadata
 
-	// ===== VIDEO DECODING
-	p.ProgressSpinner("Decoding video... ")
-
-	// create dir to store frames
-	framesDir, err := fs.CreateFramesDir()
+	// extract frames from video
+	err = framesExtract(c.ctx, videoFile)
 	if err != nil {
-		log.Fatal("Error creating frames dir:", err)
+		return "", err
 	}
 
-	// start frames progress reporter
-	p.ProgressReset(0, "Extracting frames... ")
-	done := make(chan bool)
-	// fill scan frames folder untill video finishes extracting
-	// updates progress bar in a loop
-	go scanFramesDir(framesDir, videoFile, done)
-
-	err = video.ExtractFrames(videoFile, framesDir)
+	// scan dir for frames
+	filesList, err := storage.ScanFrames()
 	if err != nil {
-		log.Fatalf("Extracting frames error: \n\n%s", err)
-	}
-
-	// stop the progress reporter
-	p.Finish()
-
-	close(done)
-
-	// ===== DECODING FRAMES
-	filesList, err := fs.ScanFrames()
-	if err != nil {
-		log.Fatal("Error scanning frames dir:", err)
+		return "", err
 	}
 	log.Debugf("total frames: %d", len(filesList))
 
 	p.ProgressReset(len(filesList), "Decoding frames... ")
 
-	// start the workers
-	numCpu := runtime.NumCPU()
-	framesCh := make(chan job.JobDec, numCpu) // buff by G count
 	resChs := make([]chan job.JobDecRes, len(filesList))
-
-	// create res channels
 	for i := 0; i < len(filesList); i++ {
 		resChs[i] = make(chan job.JobDecRes, 1)
 	}
 
-	log.Debugf("Starting %d workers", numCpu)
-	for i := 0; i <= numCpu; i++ {
+	// create channels and start the workers
+	cores := runtime.NumCPU()
+	framesCh := make(chan job.JobDec, cores) // buff by G count
+	log.Debugf("Starting %d workers", cores)
+	for i := 0; i <= cores; i++ {
 		i := i
-		go encoder.WorkerDecode(i+1, framesCh, resChs)
+		go c.worker.WorkerDecode(i+1, framesCh, resChs)
 	}
 
-	// send all the jobs, in batches of G cnt
+	// send all the jobs
 	go func() {
 		for i, file := range filesList {
 			framesCh <- job.JobDec{File: file, Idx: i}
@@ -78,39 +60,94 @@ func Decode(videoFile string) (string, error) {
 		}
 	}()
 
-	// Create a temporary file in the same directory
-	log.Debug("Reading res channels, writing to file")
-	tmpFile, err := fs.CreateTempFile()
+	// read the frames channel and write results to a file
+	out, err := framesWrite(c.ctx, resChs)
 	if err != nil {
-		log.Fatal("Cannot create temp file:", err)
+		return "", err
 	}
-	// write results to file, blocking, in order
-	for i, ch := range resChs {
-		log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
-		fr := <-ch
 
-		// set metadata if not set already
-		// it may be lost in some frames, check untill found
-		if fr.Meta.IsOk() && !metadata.IsOk() {
-			metadata = fr.Meta
-			log.Println()
-			log.Warnf("Metadata found: %s", metadata.Print())
-		}
-
-		log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.Data))
-		written, err := tmpFile.Write(fr.Data)
-		if err != nil {
-			log.Fatal("Cannot write to file:", err)
-		}
-		bytesWritten += written
-		p.Add(1)
-	}
+	// cleanup
 	log.Debug("Closing res channels")
 	for _, ch := range resChs {
 		close(ch)
 	}
 	log.Debug("Closing frames channel")
 	close(framesCh)
+
+	return out, nil
+}
+
+func framesExtract(ctx context.Context, videoFile string) error {
+	p.ProgressSpinner("Decoding video... ")
+
+	// create dir to store frames
+	framesDir, err := storage.CreateFramesDir()
+	if err != nil {
+		return fmt.Errorf("Error creating frames dir: %w", err)
+	}
+
+	// start frames progress reporter
+	p.ProgressReset(0, "Extracting frames... ")
+	done := make(chan bool)
+
+	// fill scan frames folder untill video finishes extracting
+	// updates progress bar in a loop
+	go scanFramesDir(framesDir, videoFile, done)
+
+	err = video.ExtractFrames(ctx, videoFile, framesDir)
+	if err != nil {
+		return fmt.Errorf("Error extracting frames: %w", err)
+	}
+
+	// stop the progress reporter and dir scanner
+	p.Finish()
+	close(done)
+	return nil
+}
+
+func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, error) {
+	log := logger.Log
+	var out string
+	var bytesWritten int
+	var metadata meta.Metadata
+	// Create a temporary file in the same directory
+	log.Debug("Reading res channels, writing to file")
+	tmpFile, err := storage.CreateTempFile()
+	if err != nil {
+		log.Fatal("Cannot create temp file:", err)
+	}
+
+	// ranging over channels because work should be done in order
+	// write results to file, blocking, in order
+	for i, ch := range resChs {
+	loop:
+		for {
+			select {
+			case <-ctx.Done():
+				log.Debug("Decoder exit")
+				return out, ctx.Err()
+			case fr := <-ch:
+				log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
+
+				// set metadata if not set already
+				// it may be lost in some frames, check untill found
+				if fr.Meta.IsOk() && !metadata.IsOk() {
+					metadata = fr.Meta
+					log.Println()
+					log.Warnf("Metadata found: %s", metadata.Print())
+				}
+
+				log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.Data))
+				written, err := tmpFile.Write(fr.Data)
+				if err != nil {
+					log.Fatal("Cannot write to file:", err)
+				}
+				bytesWritten += written
+				p.Add(1)
+				break loop
+			}
+		}
+	}
 
 	// check metadata
 	if metadata.IsOk() {
@@ -120,7 +157,7 @@ func Decode(videoFile string) (string, error) {
 		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
 	}
 
-	err = fs.SaveDecoded(tmpFile, out)
+	err = storage.SaveDecoded(tmpFile, out)
 	if err != nil {
 		log.Fatal("Cannot save decoded file:", err)
 	}
@@ -133,6 +170,7 @@ func Decode(videoFile string) (string, error) {
 // but the total size of all frames is about 3% less then a video (in a corrent compression case)
 // so we can use the video file size to estimate the total frames count
 func scanFramesDir(dir string, videoFile string, done <-chan bool) {
+	log := logger.Log.WithField("scope", "core scanFramesDir")
 	// get video file size
 	fileInfo, err := os.Stat(videoFile)
 	if err != nil {
@@ -144,6 +182,7 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 
 	ticker := time.NewTicker(time.Second / 10)
 	defer ticker.Stop()
+
 	// update progress with estimated num of frames
 	p.Max(totalFramesCount)
 

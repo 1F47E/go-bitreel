@@ -1,18 +1,51 @@
+//   __________          __        __________              .__
+//   \______   \___.__._/  |_  ____\______   \ ____   ____ |  |
+//    |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |
+//    |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
+//    |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
+//           \/ \/                \/       \/     \/     \/
+
 package main
 
 import (
-	"bytereel/pkg/core"
-	"bytereel/pkg/logger"
+	"context"
+	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"runtime/pprof"
+
+	"github.com/1F47E/go-bytereel/pkg/core"
+	"github.com/1F47E/go-bytereel/pkg/logger"
 
 	"github.com/urfave/cli"
 )
 
-var app = cli.NewApp()
-var log = logger.Log
+const (
+	banner = `
+__________          __        __________              .__   
+\______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
+ |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
+ |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
+ |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
+        \/ \/                \/       \/     \/     \/
 
-// global vars to be filled via build args and later used in api
+`
+	Reset  = "\033[0m"
+	Red    = "\033[31m"
+	Green  = "\033[32m"
+	Yellow = "\033[33m"
+	Blue   = "\033[34m"
+	Purple = "\033[35m"
+	Cyan   = "\033[36m"
+	Gray   = "\033[37m"
+	White  = "\033[97m"
+)
+
+var app = cli.NewApp()
+var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
+
+// to be filled on build
 var version string
 
 func init() {
@@ -24,52 +57,89 @@ func init() {
 	app.Version = version
 	app.ArgsUsage = ""
 	app.EnableBashCompletion = true
+}
+
+func main() {
+	log := logger.Log
+	fmt.Println(Green, banner, Reset)
+
+	flag.Parse()
+	args := os.Args
+
+	// profiling
+	if *pprofFlag {
+		if len(args) < 2 {
+			log.Fatal("pprof filename is required")
+		}
+		filename := args[1]
+		fmt.Println("Profiling enabled")
+		f, err := os.Create(fmt.Sprintf("%s.pprof", filename))
+		if err != nil {
+			log.Fatal(err)
+		}
+		_ = pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+		// cut off the pprof flag and filename
+		args = args[2:]
+	}
+
+	// graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt)
+		<-stop
+		fmt.Println("Shutting down...")
+		cancel()
+	}()
+
+	appCore := core.NewCore(ctx)
+
+	// on encode command
+	fEncode := func(c *cli.Context) error {
+		filename, err := getFilename(c)
+		if err != nil {
+			return err
+		}
+		return appCore.Encode(filename)
+	}
+
+	// on decode command
+	fDecode := func(c *cli.Context) error {
+		filename, err := getFilename(c)
+		if err != nil {
+			return err
+		}
+		_, err = appCore.Decode(filename)
+		return err
+	}
+
+	// on test command
+	fCompare := func(c *cli.Context) error {
+		filename, err := getFilename(c)
+		if err != nil {
+			return err
+		}
+		same, err := appCore.Compare(filename)
+		if err != nil {
+			return fmt.Errorf("Error comparing video: %v", err)
+		}
+		if !same {
+			return fmt.Errorf("Files are different")
+		}
+		log.Info("Files are the same")
+		return nil
+	}
+
 	app.Commands = []cli.Command{
-		{
-			Name:    "encode",
-			Aliases: []string{"e"},
-			Usage:   "Encode a file",
-			Action: func(c *cli.Context) error {
-				filename, err := getFilename(c)
-				if err != nil {
-					return err
-				}
-				return core.Encode(filename)
-			},
-		},
-		{
-			Name:    "decode",
-			Aliases: []string{"d"},
-			Usage:   "Decode a video",
-			Action: func(c *cli.Context) error {
-				filename, err := getFilename(c)
-				if err != nil {
-					return err
-				}
-				_, err = core.Decode(filename)
-				return err
-			},
-		},
-		{
-			Name:    "test",
-			Aliases: []string{"t"},
-			Usage:   "Run encode+decode and compare files",
-			Action: func(c *cli.Context) error {
-				filename, err := getFilename(c)
-				if err != nil {
-					return err
-				}
-				same, err := core.Compare(filename)
-				if err != nil {
-					return fmt.Errorf("Error comparing video: %v", err)
-				}
-				if !same {
-					return fmt.Errorf("Files are different")
-				}
-				log.Info("Files are the same")
-				return nil
-			},
-		},
+		cmdBuilder("encode", "e", "Encode a file", fEncode),
+		cmdBuilder("decode", "d", "Decode a video", fDecode),
+		cmdBuilder("test", "t", "Run encode+decode and compare files", fCompare),
+	}
+
+	err := app.Run(args)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -81,9 +151,11 @@ func getFilename(c *cli.Context) (string, error) {
 	return f, nil
 }
 
-func main() {
-	err := app.Run(os.Args)
-	if err != nil {
-		log.Fatal(err)
+func cmdBuilder(name, alias, descr string, f func(c *cli.Context) error) cli.Command {
+	return cli.Command{
+		Name:    name,
+		Aliases: []string{alias},
+		Usage:   descr,
+		Action:  f,
 	}
 }

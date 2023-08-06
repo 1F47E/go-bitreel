@@ -17,5 +17,5 @@ git push --tags
 echo "Building release"
 rm -rf ./dist
 #goreleaser release --snapshot --clean
-goreleaser release
+# goreleaser release
 #git push origin $new_tag
