@@ -1,9 +1,7 @@
-//   __________          __        __________              .__
-//   \______   \___.__._/  |_  ____\______   \ ____   ____ |  |
-//    |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |
-//    |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
-//    |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
-//           \/ \/                \/       \/     \/     \/
+//
+// █▄▄ █ ▀█▀ █▀█ █▀▀ █▀▀ █░░
+// █▄█ █ ░█░ █▀▄ ██▄ ██▄ █▄▄
+//
 
 package main
 
@@ -17,18 +15,16 @@ import (
 
 	"github.com/1F47E/go-bytereel/pkg/core"
 	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/tui"
 
 	"github.com/urfave/cli"
 )
 
 const (
 	banner = `
-__________          __        __________              .__   
-\______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
- |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
- |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
- |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
-        \/ \/                \/       \/     \/     \/
+
+  █▄▄ █ ▀█▀ █▀█ █▀▀ █▀▀ █░░
+  █▄█ █ ░█░ █▀▄ ██▄ ██▄ █▄▄
 
 `
 	Reset  = "\033[0m"
@@ -61,7 +57,13 @@ func init() {
 
 func main() {
 	log := logger.Log
-	fmt.Println(Green, banner, Reset)
+	fmt.Println(Purple, banner, Reset)
+
+	spinner := tui.NewSpinner()
+	spinner.Run()
+	loader := tui.NewProgress()
+	loader.Run()
+	panic("debug tui")
 
 	flag.Parse()
 	args := os.Args
