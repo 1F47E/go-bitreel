@@ -1,11 +1,8 @@
-![bytereel - converts any file to a video](assets/banner.png)
+![bitreel - converts any file to a video](assets/banner.jpg)
 
-<div align="center">
-<br><br>
-<h1>bytereel</h1>
-<h3>Convert any file to a video</h3>
-<br><br>
-</div>
+
+### Bitreel
+Tool that converts any file to a video and back again.
 
 ### Yes but why?
 
@@ -19,10 +16,24 @@ Due to this process, the resulting video will be approximately 4 times the size 
 A checksum for each frame is calculated and incorporated as metadata, ensuring the integrity of your data.<br>
 The final step involves encoding these frames into a video using ffmpeg.<br>
 
-<div align="center">
+### Metadata
+In every frame included metadata containing original filename and date of encoding.<br>
+Also it will include checksum and error correction data in future versions.
+
+### Performance
+Encoding and decoding is done in parallel using all available CPU cores.<br>
 <br>
 <img src="assets/screenshot.png" width="600"></a>
 <br>
+
+### Disk space warning
+Every frame is saved as a PNG file in a temporary directory.<br>
+After encoding is done, the temporary directory is deleted.<br>
+Expect to have at least 4 times the size of your original file available on your disk.<br>
+
+
+### Crop of the video frame
+<div align="center">
 <br>
 <br>
 <a href="assets/out.png" target="_blank">
@@ -41,19 +52,19 @@ brew install ffmpeg
 ### Install
 ```
 brew tap 1F47E/homebrew-tap
-brew install bytereel
+brew install bitreel
 ```
 
 ### Usage
 
 To encode a file
 ```
-bytereel encode <file>
+bitreel encode <file>
 ```
 
 To decode a file
 ```
-bytereel decode <file>
+bitreel decode <file>
 ```
 
 
@@ -74,3 +85,9 @@ Infinite Storage Glitch (rust)
 https://github.com/DvorakDwarf/Infinite-Storage-Glitch
 
 
+
+### TODO (PRs welcome)
+- [ ] add AES encryption
+- [ ] checksum, error correction (bit parity, hamming code, reed-solomon, etc)
+- [ ] custom resolution
+- [ ] custom pixel size 
