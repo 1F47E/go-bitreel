@@ -1,9 +1,10 @@
-//   __________          __        __________              .__
-//   \______   \___.__._/  |_  ____\______   \ ____   ____ |  |
-//    |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |
-//    |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
-//    |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
-//           \/ \/                \/       \/     \/     \/
+//
+//
+//  █▄▄ █ ▀█▀ █▀█ █▀▀ █▀▀ █░░
+//  █▄█ █ ░█░ █▀▄ ██▄ ██▄ █▄▄
+//
+// convert any file to a video
+//
 
 package main
 
@@ -17,29 +18,10 @@ import (
 
 	"github.com/1F47E/go-bytereel/pkg/core"
 	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bytereel/pkg/printer"
+	"github.com/1F47E/go-bytereel/pkg/tui"
 
 	"github.com/urfave/cli"
-)
-
-const (
-	banner = `
-__________          __        __________              .__   
-\______   \___.__._/  |_  ____\______   \ ____   ____ |  |  
- |    |  _<   |  |\   __\/ __ \|       _// __ \_/ __ \|  |  
- |    |   \\___  | |  | \  ___/|    |   \  ___/\  ___/|  |__
- |______  // ____| |__|  \___  >____|_  /\___  >\___  >____/
-        \/ \/                \/       \/     \/     \/
-
-`
-	Reset  = "\033[0m"
-	Red    = "\033[31m"
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Blue   = "\033[34m"
-	Purple = "\033[35m"
-	Cyan   = "\033[36m"
-	Gray   = "\033[37m"
-	White  = "\033[97m"
 )
 
 var app = cli.NewApp()
@@ -49,9 +31,9 @@ var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
 var version string
 
 func init() {
-	app.Name = "bytereel"
-	app.Usage = "A file to video converter"
-	app.UsageText = "bytereel [command] filename"
+	app.Name = "bitreel"
+	app.Usage = "convert any file to a video"
+	app.UsageText = "bitreel [command] filename"
 	app.HideHelp = true
 	app.HideVersion = false
 	app.Version = version
@@ -61,12 +43,11 @@ func init() {
 
 func main() {
 	log := logger.Log
-	fmt.Println(Green, banner, Reset)
-
-	flag.Parse()
-	args := os.Args
+	printer.Banner()
 
 	// profiling
+	flag.Parse()
+	args := os.Args
 	if *pprofFlag {
 		if len(args) < 2 {
 			log.Fatal("pprof filename is required")
@@ -93,7 +74,13 @@ func main() {
 		cancel()
 	}()
 
-	appCore := core.NewCore(ctx)
+	// TUI setup
+	tuiEventsCh := make(chan tui.Event)
+	t := tui.New(tuiEventsCh, ctx)
+	go t.Run()
+
+	// pass events channel to send all the events to the TUI
+	appCore := core.NewCore(ctx, tuiEventsCh)
 
 	// on encode command
 	fEncode := func(c *cli.Context) error {

@@ -9,10 +9,10 @@ import (
 	"time"
 
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	p "github.com/1F47E/go-bytereel/pkg/core/progress"
 	"github.com/1F47E/go-bytereel/pkg/job"
 	"github.com/1F47E/go-bytereel/pkg/logger"
 	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/tui"
 	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
@@ -20,31 +20,27 @@ import (
 // 2. encode chunks to images and write to files as png frames
 // 3. encode frames into video
 func (c *Core) Encode(path string) error {
-	log := logger.Log.WithField("scope", "core encode")
+	log := logger.Log
+
 	// open a file
 	file, err := os.Open(path)
 	if err != nil {
-		log.Println("Error opening file:", err)
-		return err
+		return fmt.Errorf("error opening file: %w", err)
 	}
 	defer file.Close()
 
+	// Estimate amount of frames by the file size
 	// NOTE: read into buffer smaller then a frame to leave space for metadata
 	readBuffer := make([]byte, cfg.SizeFrame-cfg.SizeMetadata)
-
-	// Progress bar with frames count progress
-	// get total file size
 	fileInfo, err := file.Stat()
 	if err != nil {
-		log.Println("Error getting file info:", err)
-		return err
+		return fmt.Errorf("error getting file info: %w", err)
 	}
 	size := fileInfo.Size()
-	estimatedFrames := int(int(size) / len(readBuffer))
+	estimatedFrames := int(int(size)/len(readBuffer)) + 1
 	log.Debug("Estimated frames:", estimatedFrames)
-	p.ProgressReset(estimatedFrames, "Encoding... ")
 
-	// ===== START WORKERS
+	// ===== Encoding workers start
 
 	jobs := make(chan job.JobEnc)
 	numCpu := runtime.NumCPU()
@@ -79,8 +75,7 @@ loop:
 					log.Debug("EOF")
 					break loop
 				}
-				log.Println("Error reading file:", err)
-				return err
+				return fmt.Errorf("error reading file: %w", err)
 			}
 			// copy the buffer to the job
 			j.Update(readBuffer, n, frameCnt)
@@ -88,7 +83,11 @@ loop:
 			// this will block untill available worker pick it up
 			log.Debug(j.Print())
 			jobs <- j
-			p.Add(1) // progress bar
+
+			// update progress bar with % of frames processed
+			percent := float64(frameCnt) / float64(estimatedFrames)
+			c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Encoding %d/%d frames", frameCnt, estimatedFrames), percent)
+
 			frameCnt++
 		}
 	}
@@ -100,19 +99,37 @@ loop:
 	wg.Wait()
 	log.Debug("All workers done")
 
-	// ====== VIDEO ENCODING
+	// ====== Video encoding start
 
-	// setup progress bar async, otherwise it wont animate
-	p.ProgressSpinner("Saving video... ")
+	c.eventsCh <- tui.NewEventBar("Saving video... ", 0)
+
+	// check output size and report progress
 	done := make(chan bool)
 	go func() {
-		ticker := time.NewTicker(time.Millisecond * 300)
+		ticker := time.NewTicker(time.Second / 10)
+		defer ticker.Stop()
 		for {
 			select {
-			case <-ticker.C:
-				p.Add(1) // spin
+			case <-c.ctx.Done():
+				return
 			case <-done:
 				return
+			case <-ticker.C:
+
+				// get video file size
+				fileInfo, err := os.Stat(cfg.PathVideoOut)
+				if err != nil {
+					// no file yet
+					continue
+				}
+				videoFileSize := fileInfo.Size()
+				totalFramesCount := int(videoFileSize/cfg.FrameFileSize - 1) // 3% error
+				percent := float64(totalFramesCount) / (float64(estimatedFrames) * 1.03)
+				log.Debugf("Estimated frames written: %d/%d - %d%%", totalFramesCount, estimatedFrames, percent)
+				if percent > 1 {
+					percent = 1
+				}
+				c.eventsCh <- tui.NewEventBar("Saving video... ", percent)
 			}
 		}
 	}()
@@ -120,16 +137,21 @@ loop:
 	// Call ffmpeg to encode frames into video
 	err = video.EncodeFrames(c.ctx)
 	if err != nil {
-		log.Fatal("Error encoding frames into video:", err)
+		return fmt.Errorf("error encoding frames into video: %w", err)
 	}
+	done <- true
 	close(done)
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
 	if err != nil {
-		panic(fmt.Sprintf("Error removing tmp/out dir: %s", err))
+		return fmt.Errorf("error removing tmp/out dir: %w", err)
 	}
 	log.Debug("\nVideo encoded")
+
+	// update TUI
+	c.eventsCh <- tui.NewEventText("Video encoded!")
+	time.Sleep(1 * time.Second) // wait for TUI to update
 
 	return nil
 }

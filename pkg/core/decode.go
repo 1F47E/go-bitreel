@@ -1,18 +1,17 @@
 package core
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"runtime"
 	"time"
 
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	p "github.com/1F47E/go-bytereel/pkg/core/progress"
 	"github.com/1F47E/go-bytereel/pkg/job"
 	"github.com/1F47E/go-bytereel/pkg/logger"
 	"github.com/1F47E/go-bytereel/pkg/meta"
 	"github.com/1F47E/go-bytereel/pkg/storage"
+	"github.com/1F47E/go-bytereel/pkg/tui"
 	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
@@ -23,11 +22,15 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	log := logger.Log.WithField("scope", "core decode")
 	var err error
 
+	c.eventsCh <- tui.NewEventSpin("Decoding video...")
+
 	// extract frames from video
-	err = framesExtract(c.ctx, videoFile)
+	err = c.framesExtract(videoFile)
 	if err != nil {
 		return "", err
 	}
+
+	c.eventsCh <- tui.NewEventSpin("Scanning frames...")
 
 	// scan dir for frames
 	filesList, err := storage.ScanFrames()
@@ -36,8 +39,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	}
 	log.Debugf("total frames: %d", len(filesList))
 
-	p.ProgressReset(len(filesList), "Decoding frames... ")
-
+	// list of channels to receive results from workers in order
 	resChs := make([]chan job.JobDecRes, len(filesList))
 	for i := 0; i < len(filesList); i++ {
 		resChs[i] = make(chan job.JobDecRes, 1)
@@ -60,8 +62,10 @@ func (c *Core) Decode(videoFile string) (string, error) {
 		}
 	}()
 
-	// read the frames channel and write results to a file
-	out, err := framesWrite(c.ctx, resChs)
+	// Frames writer
+	// will start when all the frames are extracted
+	// Because its secuential and we need to write res file in order
+	out, err := c.framesWrite(resChs)
 	if err != nil {
 		return "", err
 	}
@@ -77,8 +81,8 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	return out, nil
 }
 
-func framesExtract(ctx context.Context, videoFile string) error {
-	p.ProgressSpinner("Decoding video... ")
+func (c *Core) framesExtract(videoFile string) error {
+	c.eventsCh <- tui.NewEventSpin("Decoding video...")
 
 	// create dir to store frames
 	framesDir, err := storage.CreateFramesDir()
@@ -87,25 +91,23 @@ func framesExtract(ctx context.Context, videoFile string) error {
 	}
 
 	// start frames progress reporter
-	p.ProgressReset(0, "Extracting frames... ")
+	c.eventsCh <- tui.NewEventSpin("Extracting frames...")
 	done := make(chan bool)
 
 	// fill scan frames folder untill video finishes extracting
 	// updates progress bar in a loop
-	go scanFramesDir(framesDir, videoFile, done)
+	go c.scanFramesDir(framesDir, videoFile, done)
 
-	err = video.ExtractFrames(ctx, videoFile, framesDir)
+	err = video.ExtractFrames(c.ctx, videoFile, framesDir)
 	if err != nil {
 		return fmt.Errorf("Error extracting frames: %w", err)
 	}
 
-	// stop the progress reporter and dir scanner
-	p.Finish()
 	close(done)
 	return nil
 }
 
-func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, error) {
+func (c *Core) framesWrite(resChs []chan job.JobDecRes) (string, error) {
 	log := logger.Log
 	var out string
 	var bytesWritten int
@@ -114,8 +116,10 @@ func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, erro
 	log.Debug("Reading res channels, writing to file")
 	tmpFile, err := storage.CreateTempFile()
 	if err != nil {
-		log.Fatal("Cannot create temp file:", err)
+		return "", fmt.Errorf("Cannot create temp file: %w", err)
 	}
+
+	c.eventsCh <- tui.NewEventSpin("Writing results...")
 
 	// ranging over channels because work should be done in order
 	// write results to file, blocking, in order
@@ -123,9 +127,9 @@ func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, erro
 	loop:
 		for {
 			select {
-			case <-ctx.Done():
+			case <-c.ctx.Done():
 				log.Debug("Decoder exit")
-				return out, ctx.Err()
+				return out, c.ctx.Err()
 			case fr := <-ch:
 				log.Debugf("Waiting for the res from the worker #%d/%d", i+1, len(resChs))
 
@@ -133,35 +137,35 @@ func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, erro
 				// it may be lost in some frames, check untill found
 				if fr.Meta.IsOk() && !metadata.IsOk() {
 					metadata = fr.Meta
-					log.Println()
-					log.Warnf("Metadata found: %s", metadata.Print())
 				}
 
 				log.Debugf("Got the res from the worker #%d/%d - %d", i+1, len(resChs), len(fr.Data))
 				written, err := tmpFile.Write(fr.Data)
 				if err != nil {
-					log.Fatal("Cannot write to file:", err)
+					return "", fmt.Errorf("Cannot write to file: %w", err)
 				}
 				bytesWritten += written
-				p.Add(1)
 				break loop
 			}
 		}
 	}
 
 	// check metadata
+	statusMsg := ""
 	if metadata.IsOk() {
 		out = metadata.Filename
+		statusMsg = metadata.Print()
 	} else {
-		log.Warn("\n!!! No metadata found")
-		out = "out_decoded.bin" // default filename if no metadata found, unlikely to happen
+		// default filename if no metadata found, unlikely to happen
+		out = "out_decoded.bin"
+		statusMsg = fmt.Sprintf("Metadata not found, result file - %s", out)
 	}
+	c.eventsCh <- tui.NewEventText(statusMsg)
 
 	err = storage.SaveDecoded(tmpFile, out)
 	if err != nil {
-		log.Fatal("Cannot save decoded file:", err)
+		return "", fmt.Errorf("cannot save decoded file: %w", err)
 	}
-	log.Infof("Decoded file saved: %s", out)
 	return out, nil
 }
 
@@ -169,8 +173,8 @@ func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, erro
 // NOTE: total frames count is unknown at this point
 // but the total size of all frames is about 3% less then a video (in a corrent compression case)
 // so we can use the video file size to estimate the total frames count
-func scanFramesDir(dir string, videoFile string, done <-chan bool) {
-	log := logger.Log.WithField("scope", "core scanFramesDir")
+func (c *Core) scanFramesDir(dir string, videoFile string, done <-chan bool) {
+	log := logger.Log
 	// get video file size
 	fileInfo, err := os.Stat(videoFile)
 	if err != nil {
@@ -184,11 +188,13 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 	defer ticker.Stop()
 
 	// update progress with estimated num of frames
-	p.Max(totalFramesCount)
+	c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Extracting frames... %d/%d", 0, totalFramesCount), 0)
 
 	prevCount := 0
 	for {
 		select {
+		case <-c.ctx.Done():
+			return
 		case <-ticker.C:
 			// scan dir
 			files, err := os.ReadDir(dir)
@@ -200,7 +206,10 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 			l := len(files)
 			if l > prevCount {
 				prevCount = l
-				p.Set(l)
+
+				// update progress
+				percent := float64(l) / float64(totalFramesCount)
+				c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Extracting frames... %d/%d", l, totalFramesCount), percent)
 			}
 			log.Debugf("Scanned %d/%d frames", l, totalFramesCount)
 		case <-done:
