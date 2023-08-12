@@ -15,6 +15,7 @@ type Spinner struct {
 	spinner  spinner.Model
 	quitting bool
 	err      error
+	mode     string
 }
 
 func NewSpinner() *Spinner {
@@ -40,9 +41,12 @@ func (m *Spinner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		case "esc", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
+		case "q":
+			m.mode = "next"
+			return m, nil
 		default:
 			return m, nil
 		}
@@ -62,7 +66,13 @@ func (m *Spinner) View() string {
 	if m.err != nil {
 		return m.err.Error()
 	}
-	str := fmt.Sprintf("\n\n   %s Loading forever...press q to quit\n\n", m.spinner.View())
+
+	// next view
+	if m.mode == "next" {
+		return "next view"
+	}
+
+	str := fmt.Sprintf("\n\n   %s Loading forever...press q to next or ESC to exit\n\n", m.spinner.View())
 	if m.quitting {
 		return str + "\n"
 	}

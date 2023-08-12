@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
+
+var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render
 
 const (
 	padding  = 2
@@ -17,14 +21,41 @@ const (
 
 type tickMsg time.Time
 
+type mode int
+
+const (
+	spin mode = iota
+	bar
+)
+
 type Bar struct {
+	mode mode
+
+	title string
+	// spinner
+	spinner spinner.Model
+	// progress
 	progress progress.Model
+	percent  float64
+	finished bool
 }
 
 func NewProgress() *Bar {
 	return &Bar{
 		progress: progress.New(progress.WithDefaultGradient()),
+		percent:  0,
 	}
+}
+
+func (b *Bar) UpdateProgress(title string, percent float64) {
+	b.mode = bar
+	b.title = title
+	b.percent = percent
+}
+
+func (b *Bar) UpdateSpinner(title string) {
+	b.mode = spin
+	b.title = title
 }
 
 func (m *Bar) Run() {
@@ -52,13 +83,17 @@ func (m *Bar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.progress.Percent() == 1.0 {
-			return m, tea.Quit
+			m.finished = true
+			// return m, tea.Quit
+			return m, nil
 		}
 
 		// Note that you can also use progress.Model.SetPercent to set the
 		// percentage value explicitly, too.
-		cmd := m.progress.IncrPercent(0.25)
+		// cmd := m.progress.IncrPercent(0.25)
+		cmd := m.progress.SetPercent(m.percent)
 		return m, tea.Batch(tickCmd(), cmd)
+		// return m, cmd
 
 	// FrameMsg is sent when the progress bar wants to animate itself
 	case progress.FrameMsg:
@@ -73,9 +108,20 @@ func (m *Bar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Bar) View() string {
 	pad := strings.Repeat(" ", padding)
-	return "\n" +
-		pad + m.progress.View() + "\n"
-	// pad + helpStyle("Press any key to quit")
+
+	if m.mode == spin {
+		return "spinner mode"
+
+	} else if m.mode == bar {
+		if m.finished {
+			return "\n" + pad + "✅ Finished!\n"
+		}
+		return "\n" +
+			pad + m.title + "\n\n" +
+			pad + m.progress.View() + "\n" +
+			pad + helpStyle("Press any key to quit")
+	}
+	return "-"
 }
 
 func tickCmd() tea.Cmd {

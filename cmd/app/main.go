@@ -45,9 +45,9 @@ var pprofFlag = flag.Bool("pprof", false, "enable pprof profiling")
 var version string
 
 func init() {
-	app.Name = "bytereel"
-	app.Usage = "A file to video converter"
-	app.UsageText = "bytereel [command] filename"
+	app.Name = "bitreel"
+	app.Usage = "convert any file to a video"
+	app.UsageText = "bitreel [command] filename"
 	app.HideHelp = true
 	app.HideVersion = false
 	app.Version = version
@@ -59,16 +59,15 @@ func main() {
 	log := logger.Log
 	fmt.Println(Purple, banner, Reset)
 
-	spinner := tui.NewSpinner()
-	spinner.Run()
-	loader := tui.NewProgress()
-	loader.Run()
-	panic("debug tui")
-
-	flag.Parse()
-	args := os.Args
+	// spinner := tui.NewSpinner()
+	// spinner.Run()
+	// loader := tui.NewProgress()
+	// loader.Run()
+	// panic("debug tui")
 
 	// profiling
+	flag.Parse()
+	args := os.Args
 	if *pprofFlag {
 		if len(args) < 2 {
 			log.Fatal("pprof filename is required")
@@ -95,7 +94,13 @@ func main() {
 		cancel()
 	}()
 
-	appCore := core.NewCore(ctx)
+	// TUI setup
+	tuiEventsCh := make(chan tui.Event)
+	t := tui.New(tuiEventsCh, ctx)
+	go t.Run()
+
+	// pass events channel to send all the events to the TUI
+	appCore := core.NewCore(ctx, tuiEventsCh)
 
 	// on encode command
 	fEncode := func(c *cli.Context) error {

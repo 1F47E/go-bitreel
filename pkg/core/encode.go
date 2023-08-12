@@ -6,13 +6,12 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"time"
 
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	p "github.com/1F47E/go-bytereel/pkg/core/progress"
 	"github.com/1F47E/go-bytereel/pkg/job"
 	"github.com/1F47E/go-bytereel/pkg/logger"
 	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bytereel/pkg/tui"
 	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
@@ -42,7 +41,9 @@ func (c *Core) Encode(path string) error {
 	size := fileInfo.Size()
 	estimatedFrames := int(int(size) / len(readBuffer))
 	log.Debug("Estimated frames:", estimatedFrames)
-	p.ProgressReset(estimatedFrames, "Encoding... ")
+
+	// change TUI to progress bar mode and update title and percents
+	c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Encoding... %d frames", estimatedFrames), 0)
 
 	// ===== START WORKERS
 
@@ -88,7 +89,11 @@ loop:
 			// this will block untill available worker pick it up
 			log.Debug(j.Print())
 			jobs <- j
-			p.Add(1) // progress bar
+
+			// update progress bar
+			percent := float64(frameCnt) / float64(estimatedFrames)
+			c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Encoding... %d frames", frameCnt), percent)
+
 			frameCnt++
 		}
 	}
@@ -103,26 +108,30 @@ loop:
 	// ====== VIDEO ENCODING
 
 	// setup progress bar async, otherwise it wont animate
-	p.ProgressSpinner("Saving video... ")
-	done := make(chan bool)
-	go func() {
-		ticker := time.NewTicker(time.Millisecond * 300)
-		for {
-			select {
-			case <-ticker.C:
-				p.Add(1) // spin
-			case <-done:
-				return
-			}
-		}
-	}()
+	// p.ProgressSpinner("Saving video... ")
+	c.eventsCh <- tui.NewEventSpin("Saving video... ")
+
+	// done := make(chan bool)
+	// go func() {
+	// 	cnt := 0
+	// 	ticker := time.NewTicker(time.Millisecond * 300)
+	// 	for {
+	// 		select {
+	// 		case <-ticker.C:
+	// 			p.Add(1) // spin
+	// 			c.eventsCh <- tui.Event{Type: "spinner", Data: fmt.Sprintf("Saving video... %d frames", cnt)}
+	// 		case <-done:
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
 	// Call ffmpeg to encode frames into video
 	err = video.EncodeFrames(c.ctx)
 	if err != nil {
 		log.Fatal("Error encoding frames into video:", err)
 	}
-	close(done)
+	// close(done)
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
