@@ -8,11 +8,11 @@ import (
 	"time"
 
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	p "github.com/1F47E/go-bytereel/pkg/core/progress"
 	"github.com/1F47E/go-bytereel/pkg/job"
 	"github.com/1F47E/go-bytereel/pkg/logger"
 	"github.com/1F47E/go-bytereel/pkg/meta"
 	"github.com/1F47E/go-bytereel/pkg/storage"
+	"github.com/1F47E/go-bytereel/pkg/tui"
 	"github.com/1F47E/go-bytereel/pkg/video"
 )
 
@@ -23,8 +23,10 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	log := logger.Log.WithField("scope", "core decode")
 	var err error
 
+	c.eventsCh <- tui.NewEventSpin("Decoding video...")
+
 	// extract frames from video
-	err = framesExtract(c.ctx, videoFile)
+	err = framesExtract(c.ctx, c.eventsCh, videoFile)
 	if err != nil {
 		return "", err
 	}
@@ -36,7 +38,7 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	}
 	log.Debugf("total frames: %d", len(filesList))
 
-	p.ProgressReset(len(filesList), "Decoding frames... ")
+	c.eventsCh <- tui.NewEventSpin(fmt.Sprintf("Decoding %d frames...", len(filesList)))
 
 	resChs := make([]chan job.JobDecRes, len(filesList))
 	for i := 0; i < len(filesList); i++ {
@@ -77,8 +79,9 @@ func (c *Core) Decode(videoFile string) (string, error) {
 	return out, nil
 }
 
-func framesExtract(ctx context.Context, videoFile string) error {
-	p.ProgressSpinner("Decoding video... ")
+func framesExtract(ctx context.Context, eventsCh chan tui.Event, videoFile string) error {
+	eventsCh <- tui.NewEventSpin("Decoding video...")
+	// p.ProgressSpinner("Decoding video... ")
 
 	// create dir to store frames
 	framesDir, err := storage.CreateFramesDir()
@@ -87,7 +90,8 @@ func framesExtract(ctx context.Context, videoFile string) error {
 	}
 
 	// start frames progress reporter
-	p.ProgressReset(0, "Extracting frames... ")
+	// p.ProgressReset(0, "Extracting frames... ")
+	eventsCh <- tui.NewEventSpin("Extracting frames...")
 	done := make(chan bool)
 
 	// fill scan frames folder untill video finishes extracting
@@ -100,7 +104,7 @@ func framesExtract(ctx context.Context, videoFile string) error {
 	}
 
 	// stop the progress reporter and dir scanner
-	p.Finish()
+	eventsCh <- tui.NewEventText("Done.")
 	close(done)
 	return nil
 }
@@ -143,7 +147,8 @@ func framesWrite(ctx context.Context, resChs []chan job.JobDecRes) (string, erro
 					log.Fatal("Cannot write to file:", err)
 				}
 				bytesWritten += written
-				p.Add(1)
+				// p.Add(1)
+				// TODO: add progress
 				break loop
 			}
 		}
@@ -184,7 +189,8 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 	defer ticker.Stop()
 
 	// update progress with estimated num of frames
-	p.Max(totalFramesCount)
+	// p.Max(totalFramesCount)
+	// TODO: add progress
 
 	prevCount := 0
 	for {
@@ -200,7 +206,8 @@ func scanFramesDir(dir string, videoFile string, done <-chan bool) {
 			l := len(files)
 			if l > prevCount {
 				prevCount = l
-				p.Set(l)
+				// p.Set(l)
+				// TODO: add progress
 			}
 			log.Debugf("Scanned %d/%d frames", l, totalFramesCount)
 		case <-done:
