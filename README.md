@@ -1,7 +1,7 @@
 ![bitreel - converts any file to a video](assets/banner.jpg)
 
 <br>
-<img src="assets/screenshot.png"></a>
+<img src="assets/screenshot2.png"></a>
 <br>
 
 ### Bitreel
