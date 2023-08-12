@@ -2,37 +2,7 @@ package tui
 
 import (
 	"context"
-
-	"github.com/1F47E/go-bytereel/pkg/logger"
 )
-
-type eventType int
-
-const (
-	eventTypeSpin eventType = iota
-	eventTypeBar
-)
-
-type Event struct {
-	eventType eventType
-	text      string
-	percent   float64
-}
-
-func NewEventSpin(text string) Event {
-	return Event{
-		eventType: eventTypeSpin,
-		text:      text,
-	}
-}
-
-func NewEventBar(text string, percent float64) Event {
-	return Event{
-		eventType: eventTypeBar,
-		text:      text,
-		percent:   percent,
-	}
-}
 
 type TUI struct {
 	ctx      context.Context
@@ -44,27 +14,25 @@ func New(eventsCh chan Event, ctx context.Context) *TUI {
 }
 
 func (t *TUI) Run() {
-	log := logger.Log
+	// init bubbletea spinner and progress bar
+	widget := NewWidget()
+	go widget.Run()
 
-	loader := NewProgress()
-	go loader.Run()
-
+	// read events from channel and update spinner/progress bar
 	for {
 		select {
-		// exit TUI
 		case <-t.ctx.Done():
-			log.Warn("tui ctx done")
 			return
 
 		case event := <-t.eventsCh:
-			// log.Warnf("event: %+v", event)
-			if event.eventType == eventTypeSpin {
-				loader.UpdateSpinner(event.text)
-			} else if event.eventType == eventTypeBar {
-				loader.UpdateProgress(event.text, event.percent)
+			switch event.eventType {
+			case eventTypeSpin:
+				widget.SetSpinner(event.text)
+			case eventTypeBar:
+				widget.SetProgress(event.text, event.percent)
+			case eventTypeText:
+				widget.SetText(event.text)
 			}
-			// switch event.Type {
-			// case "spinner":
 		}
 	}
 }

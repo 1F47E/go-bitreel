@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	cfg "github.com/1F47E/go-bytereel/pkg/config"
 	"github.com/1F47E/go-bytereel/pkg/job"
@@ -20,30 +21,24 @@ import (
 // 3. encode frames into video
 func (c *Core) Encode(path string) error {
 	log := logger.Log.WithField("scope", "core encode")
+
 	// open a file
 	file, err := os.Open(path)
 	if err != nil {
-		log.Println("Error opening file:", err)
-		return err
+		return fmt.Errorf("error opening file: %w", err)
 	}
 	defer file.Close()
 
+	// Estimate amount of frames by the file size
 	// NOTE: read into buffer smaller then a frame to leave space for metadata
 	readBuffer := make([]byte, cfg.SizeFrame-cfg.SizeMetadata)
-
-	// Progress bar with frames count progress
-	// get total file size
 	fileInfo, err := file.Stat()
 	if err != nil {
-		log.Println("Error getting file info:", err)
-		return err
+		return fmt.Errorf("error getting file info: %w", err)
 	}
 	size := fileInfo.Size()
 	estimatedFrames := int(int(size) / len(readBuffer))
 	log.Debug("Estimated frames:", estimatedFrames)
-
-	// change TUI to progress bar mode and update title and percents
-	c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Encoding... %d frames", estimatedFrames), 0)
 
 	// ===== START WORKERS
 
@@ -80,8 +75,7 @@ loop:
 					log.Debug("EOF")
 					break loop
 				}
-				log.Println("Error reading file:", err)
-				return err
+				return fmt.Errorf("error reading file: %w", err)
 			}
 			// copy the buffer to the job
 			j.Update(readBuffer, n, frameCnt)
@@ -90,9 +84,9 @@ loop:
 			log.Debug(j.Print())
 			jobs <- j
 
-			// update progress bar
+			// update progress bar with % of frames processed
 			percent := float64(frameCnt) / float64(estimatedFrames)
-			c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Encoding... %d frames", frameCnt), percent)
+			c.eventsCh <- tui.NewEventBar(fmt.Sprintf("Encoding %d/%d frames", frameCnt, estimatedFrames), percent)
 
 			frameCnt++
 		}
@@ -107,38 +101,25 @@ loop:
 
 	// ====== VIDEO ENCODING
 
-	// setup progress bar async, otherwise it wont animate
-	// p.ProgressSpinner("Saving video... ")
+	// update TUI with spinner
 	c.eventsCh <- tui.NewEventSpin("Saving video... ")
-
-	// done := make(chan bool)
-	// go func() {
-	// 	cnt := 0
-	// 	ticker := time.NewTicker(time.Millisecond * 300)
-	// 	for {
-	// 		select {
-	// 		case <-ticker.C:
-	// 			p.Add(1) // spin
-	// 			c.eventsCh <- tui.Event{Type: "spinner", Data: fmt.Sprintf("Saving video... %d frames", cnt)}
-	// 		case <-done:
-	// 			return
-	// 		}
-	// 	}
-	// }()
 
 	// Call ffmpeg to encode frames into video
 	err = video.EncodeFrames(c.ctx)
 	if err != nil {
-		log.Fatal("Error encoding frames into video:", err)
+		return fmt.Errorf("error encoding frames into video: %w", err)
 	}
-	// close(done)
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
 	if err != nil {
-		panic(fmt.Sprintf("Error removing tmp/out dir: %s", err))
+		return fmt.Errorf("error removing tmp/out dir: %w", err)
 	}
 	log.Debug("\nVideo encoded")
+
+	// update TUI
+	c.eventsCh <- tui.NewEventText("Video encoded!")
+	time.Sleep(1 * time.Second) // wait for TUI to update
 
 	return nil
 }
