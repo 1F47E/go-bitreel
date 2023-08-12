@@ -1,12 +1,13 @@
 ![bitreel - converts any file to a video](assets/banner.jpg)
 
+<br>
+<img src="assets/screenshot.png"></a>
+<br>
 
 ### Bitreel
 Tool that converts any file to a video and back again.
-
-### Yes but why?
-
 So you can upload it a to video hosting and have an infinite* tape storage.
+
 
 
 ### How does it work?
@@ -22,22 +23,14 @@ Also it will include checksum and error correction data in future versions.
 
 ### Performance
 Encoding and decoding is done in parallel using all available CPU cores.<br>
-<br>
-<img src="assets/screenshot.png" width="600"></a>
-<br>
-
-### Disk space warning
-Every frame is saved as a PNG file in a temporary directory.<br>
-After encoding is done, the temporary directory is deleted.<br>
-Expect to have at least 4 times the size of your original file available on your disk.<br>
 
 
 ### Crop of the video frame
 <div align="center">
 <br>
 <br>
-<a href="assets/out.png" target="_blank">
-<img src="assets/out_cut.png" width="420"></a>
+<a href="https://github.com/1F47E/go-bitreel/blob/master/assets/out.png?raw=true">
+    <img src="assets/out_cut.png" width="420"></a>
 <br>
 </div>
 
