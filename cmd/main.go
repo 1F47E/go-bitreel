@@ -45,12 +45,6 @@ func main() {
 	log := logger.Log
 	printer.Banner()
 
-	// spinner := tui.NewSpinner()
-	// spinner.Run()
-	// loader := tui.NewProgress()
-	// loader.Run()
-	// panic("debug tui")
-
 	// profiling
 	flag.Parse()
 	args := os.Args

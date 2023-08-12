@@ -20,7 +20,7 @@ import (
 // 2. encode chunks to images and write to files as png frames
 // 3. encode frames into video
 func (c *Core) Encode(path string) error {
-	log := logger.Log.WithField("scope", "core encode")
+	log := logger.Log
 
 	// open a file
 	file, err := os.Open(path)
@@ -37,10 +37,10 @@ func (c *Core) Encode(path string) error {
 		return fmt.Errorf("error getting file info: %w", err)
 	}
 	size := fileInfo.Size()
-	estimatedFrames := int(int(size) / len(readBuffer))
+	estimatedFrames := int(int(size)/len(readBuffer)) + 1
 	log.Debug("Estimated frames:", estimatedFrames)
 
-	// ===== START WORKERS
+	// ===== Encoding workers start
 
 	jobs := make(chan job.JobEnc)
 	numCpu := runtime.NumCPU()
@@ -99,16 +99,48 @@ loop:
 	wg.Wait()
 	log.Debug("All workers done")
 
-	// ====== VIDEO ENCODING
+	// ====== Video encoding start
 
-	// update TUI with spinner
-	c.eventsCh <- tui.NewEventSpin("Saving video... ")
+	c.eventsCh <- tui.NewEventBar("Saving video... ", 0)
+
+	// check output size and report progress
+	done := make(chan bool)
+	go func() {
+		ticker := time.NewTicker(time.Second / 10)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+
+				// get video file size
+				fileInfo, err := os.Stat(cfg.PathVideoOut)
+				if err != nil {
+					// no file yet
+					continue
+				}
+				videoFileSize := fileInfo.Size()
+				totalFramesCount := int(videoFileSize/cfg.FrameFileSize - 1) // 3% error
+				percent := float64(totalFramesCount) / (float64(estimatedFrames) * 1.03)
+				log.Debugf("Estimated frames written: %d/%d - %d%%", totalFramesCount, estimatedFrames, percent)
+				if percent > 1 {
+					percent = 1
+				}
+				c.eventsCh <- tui.NewEventBar("Saving video... ", percent)
+			}
+		}
+	}()
 
 	// Call ffmpeg to encode frames into video
 	err = video.EncodeFrames(c.ctx)
 	if err != nil {
 		return fmt.Errorf("error encoding frames into video: %w", err)
 	}
+	done <- true
+	close(done)
 
 	// clean up tmp/out dir
 	err = os.RemoveAll("tmp/out")
