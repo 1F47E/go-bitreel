@@ -89,3 +89,4 @@ https://github.com/DvorakDwarf/Infinite-Storage-Glitch
 !!!
 - [ ] fix homebrew tap
 - [ ] rename to bitreel
+- [ ] force ffmpeg to quit on ctx cancel when encoding
