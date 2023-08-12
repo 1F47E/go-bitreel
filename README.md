@@ -84,3 +84,6 @@ https://github.com/DvorakDwarf/Infinite-Storage-Glitch
 - [ ] checksum, error correction (bit parity, hamming code, reed-solomon, etc)
 - [ ] custom resolution
 - [ ] custom pixel size 
+!!!
+- [ ] fix homebrew tap
+- [ ] rename to bitreel
