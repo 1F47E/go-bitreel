@@ -1,4 +1,6 @@
 ![bitreel - converts any file to a video](assets/banner.jpg)
+## [![Build Status](https://github.com/1F47E/go-bitreel/actions/workflows/go.yml/badge.svg)](https://github.com/1F47E/go-bitreel/actions/workflows/go.yml)  [![Go Report Card](https://goreportcard.com/badge/1F47E/go-bitreel)](https://goreportcard.com/report/1F47E/go-bitreel)
+
 
 <br>
 <img src="assets/screenshot2.png"></a>
