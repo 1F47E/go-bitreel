@@ -125,7 +125,7 @@ loop:
 				videoFileSize := fileInfo.Size()
 				totalFramesCount := int(videoFileSize/cfg.FrameFileSize - 1) // 3% error
 				percent := float64(totalFramesCount) / (float64(estimatedFrames) * 1.03)
-				log.Debugf("Estimated frames written: %d/%d - %d%%", totalFramesCount, estimatedFrames, percent)
+				log.Debugf("Estimated frames written: %d/%d - %f%%", totalFramesCount, estimatedFrames, percent)
 				if percent > 1 {
 					percent = 1
 				}
