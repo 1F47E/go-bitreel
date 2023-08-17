@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	"github.com/1F47E/go-bytereel/pkg/logger"
+	cfg "github.com/1F47E/go-bitreel/internal/config"
+	"github.com/1F47E/go-bitreel/internal/logger"
 )
 
 var log = logger.Log.WithField("scope", "storage")

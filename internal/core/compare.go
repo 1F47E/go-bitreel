@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	cfg "github.com/1F47E/go-bytereel/pkg/config"
+	cfg "github.com/1F47E/go-bitreel/internal/config"
 )
 
 // encode + decode + compare

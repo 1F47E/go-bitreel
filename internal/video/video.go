@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
-	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	"github.com/1F47E/go-bytereel/pkg/logger"
+	cfg "github.com/1F47E/go-bitreel/internal/config"
+	"github.com/1F47E/go-bitreel/internal/logger"
 )
 
 // call ffmpeg to decode the video into frames

@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/1F47E/go-bytereel/pkg/logger"
+	"github.com/1F47E/go-bitreel/internal/logger"
 )
 
 //nolint:unused

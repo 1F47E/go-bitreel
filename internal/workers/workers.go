@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	cfg "github.com/1F47E/go-bytereel/pkg/config"
-	"github.com/1F47E/go-bytereel/pkg/encoder"
-	"github.com/1F47E/go-bytereel/pkg/job"
-	"github.com/1F47E/go-bytereel/pkg/logger"
-	"github.com/1F47E/go-bytereel/pkg/meta"
-	"github.com/1F47E/go-bytereel/pkg/storage"
+	cfg "github.com/1F47E/go-bitreel/internal/config"
+	"github.com/1F47E/go-bitreel/internal/encoder"
+	"github.com/1F47E/go-bitreel/internal/job"
+	"github.com/1F47E/go-bitreel/internal/logger"
+	"github.com/1F47E/go-bitreel/internal/meta"
+	"github.com/1F47E/go-bitreel/internal/storage"
 )
 
 type Worker struct {

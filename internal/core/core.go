@@ -3,8 +3,8 @@ package core
 import (
 	"context"
 
-	"github.com/1F47E/go-bytereel/pkg/tui"
-	"github.com/1F47E/go-bytereel/pkg/workers"
+	"github.com/1F47E/go-bitreel/internal/tui"
+	"github.com/1F47E/go-bitreel/internal/workers"
 )
 
 type Core struct {

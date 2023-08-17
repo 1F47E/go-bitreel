@@ -3,7 +3,7 @@ package job
 import (
 	"fmt"
 
-	"github.com/1F47E/go-bytereel/pkg/meta"
+	"github.com/1F47E/go-bitreel/internal/meta"
 )
 
 // job for the decoding worker

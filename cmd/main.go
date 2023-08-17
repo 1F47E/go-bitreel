@@ -16,10 +16,10 @@ import (
 	"os/signal"
 	"runtime/pprof"
 
-	"github.com/1F47E/go-bytereel/pkg/core"
-	"github.com/1F47E/go-bytereel/pkg/logger"
-	"github.com/1F47E/go-bytereel/pkg/printer"
-	"github.com/1F47E/go-bytereel/pkg/tui"
+	"github.com/1F47E/go-bitreel/internal/core"
+	"github.com/1F47E/go-bitreel/internal/logger"
+	"github.com/1F47E/go-bitreel/internal/printer"
+	"github.com/1F47E/go-bitreel/internal/tui"
 
 	"github.com/urfave/cli"
 )
